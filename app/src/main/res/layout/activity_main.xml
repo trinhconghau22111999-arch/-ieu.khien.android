@@ -4,27 +4,46 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="center"
-    android:padding="24dp">
+    android:padding="32dp"
+    android:background="#111111">
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Remote Assist"
-        android:textSize="26sp"
+        android:textSize="28sp"
         android:textStyle="bold"
-        android:layout_marginBottom="32dp" />
+        android:textColor="#FFFFFF"
+        android:layout_marginBottom="8dp" />
 
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Điều khiển điện thoại từ máy tính bảng"
+        android:textSize="14sp"
+        android:textColor="#AAAAAA"
+        android:gravity="center"
+        android:layout_marginBottom="48dp" />
+
+    <!-- Máy B: điện thoại bị điều khiển -->
     <Button
         android:id="@+id/btn_role_controlled"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Cho phép máy khác điều khiển máy này" />
+        android:layout_height="56dp"
+        android:backgroundTint="#C62828"
+        android:text="📱  Máy này bị điều khiển (Điện thoại)"
+        android:textColor="#FFFFFF"
+        android:textSize="15sp" />
 
+    <!-- Máy A: máy tính bảng điều khiển -->
     <Button
         android:id="@+id/btn_role_controller"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="56dp"
         android:layout_marginTop="16dp"
-        android:text="Điều khiển một máy khác" />
+        android:backgroundTint="#1B5E20"
+        android:text="🖥️  Máy này điều khiển (Máy tính bảng)"
+        android:textColor="#FFFFFF"
+        android:textSize="15sp" />
 
 </LinearLayout>

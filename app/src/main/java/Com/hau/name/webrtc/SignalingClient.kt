@@ -1,25 +1,29 @@
 package Com.hau.name.webrtc
 
+import android.util.Log
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
 
+private const val TAG = "SignalingClient"
+
 /**
- * Lớp trao đổi tín hiệu WebRTC (offer / answer / ICE candidates) qua Firebase Realtime Database.
+ * Wrap Firebase Realtime Database làm signaling server cho WebRTC.
  *
- * Cấu trúc Firebase:
- * rooms/{code}/
- *   status         : "waiting" | "connected" | "ended"
- *   consentGivenAt : Long (ms)
- *   offer          : { sdp, type }        — Máy B (host) ghi, Máy A đọc
- *   answer         : { sdp, type }        — Máy A ghi, Máy B đọc
- *   iceCandidatesHost/   {pushId}: {sdpMid, sdpMLineIndex, candidate}  — Máy B ghi
- *   iceCandidatesCtrl/   {pushId}: {sdpMid, sdpMLineIndex, candidate}  — Máy A ghi
+ * Schema Firebase:
+ *   rooms/{roomCode}/
+ *     status        : "waiting" | "connected" | "ended"
+ *     offer         : SDP string (Máy B ghi)
+ *     answer        : SDP string (Máy A ghi)
+ *     ice_host/     : { sdpMid, sdpMLineIndex, candidate } (Máy B ghi)
+ *     ice_client/   : { sdpMid, sdpMLineIndex, candidate } (Máy A ghi)
  *
- * [isHost] = true  → Máy B (được điều khiển)
- * [isHost] = false → Máy A (máy điều khiển)
+ * THAY ĐỔI:
+ * - Thêm startListening() để Máy A bắt đầu lắng nghe offer sau khi init.
+ * - Thêm clearForReconnect() để xóa offer/answer cũ khi reconnect.
+ * - Thêm setWaiting() để Máy B reset trạng thái phòng sau reconnect.
+ * - markEnded() / release() tách bạch.
  */
 class SignalingClient(
     private val roomCode: String,
@@ -33,94 +37,132 @@ class SignalingClient(
         fun onRemoteDisconnected()
     }
 
-    private val room: DatabaseReference =
-        FirebaseDatabase.getInstance().reference.child("rooms").child(roomCode)
+    private val db = FirebaseDatabase.getInstance().reference.child("rooms").child(roomCode)
+    private val listeners = mutableListOf<Pair<com.google.firebase.database.DatabaseReference, ValueEventListener>>()
+    private var released = false
 
-    private val localIcePath get() = if (isHost) "iceCandidatesHost" else "iceCandidatesCtrl"
-    private val remoteIcePath get() = if (isHost) "iceCandidatesCtrl" else "iceCandidatesHost"
-
-    private var offerListener: ValueEventListener? = null
-    private var answerListener: ValueEventListener? = null
-    private var iceListener: ValueEventListener? = null
-    private var statusListener: ValueEventListener? = null
-
-    /** Bắt đầu lắng nghe — gọi ngay sau khi PeerConnection đã sẵn sàng. */
-    fun start() {
+    init {
         if (isHost) {
-            // Máy B lắng nghe answer từ Máy A
-            answerListener = object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    val sdp = snapshot.child("sdp").getValue(String::class.java) ?: return
-                    listener.onAnswerReceived(sdp)
-                }
-                override fun onCancelled(error: DatabaseError) {}
-            }
-            room.child("answer").addValueEventListener(answerListener!!)
-        } else {
-            // Máy A lắng nghe offer từ Máy B
-            offerListener = object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    val sdp = snapshot.child("sdp").getValue(String::class.java) ?: return
-                    listener.onOfferReceived(sdp)
-                }
-                override fun onCancelled(error: DatabaseError) {}
-            }
-            room.child("offer").addValueEventListener(offerListener!!)
+            // Máy B: lắng nghe answer và ICE từ Máy A ngay khi tạo
+            listenForAnswer()
+            listenForIce(fromHost = false)
+            listenForStatus()
         }
-
-        // Cả 2 đều lắng nghe ICE candidates của phía kia
-        iceListener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                snapshot.children.forEach { child ->
-                    val sdpMid = child.child("sdpMid").getValue(String::class.java) ?: return@forEach
-                    val sdpMLineIndex = child.child("sdpMLineIndex").getValue(Int::class.java) ?: return@forEach
-                    val candidate = child.child("candidate").getValue(String::class.java) ?: return@forEach
-                    listener.onIceCandidateReceived(sdpMid, sdpMLineIndex, candidate)
-                }
-            }
-            override fun onCancelled(error: DatabaseError) {}
-        }
-        room.child(remoteIcePath).addValueEventListener(iceListener!!)
-
-        // Lắng nghe khi phía kia ngắt kết nối
-        statusListener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                if (snapshot.getValue(String::class.java) == "ended") {
-                    listener.onRemoteDisconnected()
-                }
-            }
-            override fun onCancelled(error: DatabaseError) {}
-        }
-        room.child("status").addValueEventListener(statusListener!!)
+        // Máy A: gọi startListening() sau khi PeerConnection đã init
     }
 
+    /** Máy A gọi sau init để bắt đầu nhận offer */
+    fun startListening() {
+        if (isHost) return
+        listenForOffer()
+        listenForIce(fromHost = true)
+        listenForStatus()
+    }
+
+    // ── Ghi ──────────────────────────────────────────────────────────────────
+
     fun sendOffer(sdp: String) {
-        room.child("offer").setValue(mapOf("type" to "offer", "sdp" to sdp))
+        db.child("offer").setValue(sdp)
+        db.child("status").setValue("waiting")
     }
 
     fun sendAnswer(sdp: String) {
-        room.child("answer").setValue(mapOf("type" to "answer", "sdp" to sdp))
+        db.child("answer").setValue(sdp)
+        db.child("status").setValue("connected")
     }
 
     fun sendIceCandidate(sdpMid: String, sdpMLineIndex: Int, candidate: String) {
-        room.child(localIcePath).push().setValue(
+        val key = if (isHost) "ice_host" else "ice_client"
+        db.child(key).push().setValue(
             mapOf("sdpMid" to sdpMid, "sdpMLineIndex" to sdpMLineIndex, "candidate" to candidate)
         )
     }
 
-    fun markConnected() {
-        room.child("status").setValue("connected")
-    }
-
     fun markEnded() {
-        room.child("status").setValue("ended")
+        if (!released) db.child("status").setValue("ended")
     }
 
-    /** Dọn toàn bộ listener khi phiên kết thúc để tránh rò rỉ bộ nhớ. */
+    /** Reset phòng để chờ kết nối lại (Máy B gọi sau reconnect) */
+    fun setWaiting() {
+        db.child("answer").removeValue()
+        db.child("ice_client").removeValue()
+        db.child("status").setValue("waiting")
+    }
+
+    /** Xóa dữ liệu offer/answer/ICE cũ trước khi tạo offer mới */
+    fun clearForReconnect() {
+        db.child("offer").removeValue()
+        db.child("answer").removeValue()
+        db.child("ice_host").removeValue()
+        db.child("ice_client").removeValue()
+    }
+
     fun release() {
-        offerListener?.let { room.child("offer").removeEventListener(it) }
-        answerListener?.let { room.child("answer").removeEventListener(it) }
-        iceListener?.let { room.child(remoteIcePath).removeEventListener(it) }
-        statusListener?.let { room.child("status").removeEventListener(it) }
+        released = true
+        listeners.forEach { (ref, l) -> ref.removeEventListener(l) }
+        listeners.clear()
+    }
+
+    // ── Lắng nghe ────────────────────────────────────────────────────────────
+
+    private fun listenForOffer() {
+        val ref = db.child("offer")
+        val l = object : ValueEventListener {
+            override fun onDataChange(snap: DataSnapshot) {
+                val sdp = snap.getValue(String::class.java) ?: return
+                Log.d(TAG, "Nhận offer")
+                listener.onOfferReceived(sdp)
+            }
+            override fun onCancelled(e: DatabaseError) = Log.e(TAG, "offer listen error: $e")
+        }
+        ref.addValueEventListener(l)
+        listeners.add(ref to l)
+    }
+
+    private fun listenForAnswer() {
+        val ref = db.child("answer")
+        val l = object : ValueEventListener {
+            override fun onDataChange(snap: DataSnapshot) {
+                val sdp = snap.getValue(String::class.java) ?: return
+                Log.d(TAG, "Nhận answer")
+                listener.onAnswerReceived(sdp)
+            }
+            override fun onCancelled(e: DatabaseError) = Log.e(TAG, "answer listen error: $e")
+        }
+        ref.addValueEventListener(l)
+        listeners.add(ref to l)
+    }
+
+    private fun listenForIce(fromHost: Boolean) {
+        val key = if (fromHost) "ice_host" else "ice_client"
+        val ref = db.child(key)
+        val l = object : ValueEventListener {
+            override fun onDataChange(snap: DataSnapshot) {
+                for (child in snap.children) {
+                    val mid = child.child("sdpMid").getValue(String::class.java) ?: continue
+                    val idx = child.child("sdpMLineIndex").getValue(Int::class.java) ?: continue
+                    val cand = child.child("candidate").getValue(String::class.java) ?: continue
+                    listener.onIceCandidateReceived(mid, idx, cand)
+                }
+            }
+            override fun onCancelled(e: DatabaseError) = Log.e(TAG, "ice listen error: $e")
+        }
+        ref.addValueEventListener(l)
+        listeners.add(ref to l)
+    }
+
+    private fun listenForStatus() {
+        val ref = db.child("status")
+        val l = object : ValueEventListener {
+            override fun onDataChange(snap: DataSnapshot) {
+                if (snap.getValue(String::class.java) == "ended") {
+                    Log.d(TAG, "Phòng kết thúc")
+                    listener.onRemoteDisconnected()
+                }
+            }
+            override fun onCancelled(e: DatabaseError) = Log.e(TAG, "status listen error: $e")
+        }
+        ref.addValueEventListener(l)
+        listeners.add(ref to l)
     }
 }

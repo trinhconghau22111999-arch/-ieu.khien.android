@@ -1,305 +1,354 @@
 package Com.hau.name
 
+import android.content.SharedPreferences
+import android.content.pm.ActivityInfo
 import android.os.Bundle
-import android.util.Log
+import android.view.MotionEvent
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
-import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import Com.hau.name.webrtc.PeerConnectionManager
 import Com.hau.name.webrtc.SignalingClient
-import com.google.firebase.database.FirebaseDatabase
+import org.json.JSONObject
 import org.webrtc.EglBase
-import org.webrtc.RendererCommon
 import org.webrtc.SurfaceViewRenderer
-
-private const val TAG = "ControllerActivity"
+import kotlin.math.roundToInt
 
 /**
- * Máy A (máy điều khiển).
- * 1. Nhập mã 6 số.
- * 2. Lấy offer từ Firebase (do Máy B đã gửi).
- * 3. Tạo answer, trao đổi ICE → WebRTC kết nối.
- * 4. Render video màn hình Máy B lên SurfaceViewRenderer.
- * 5. Mọi thao tác chạm → gửi tọa độ chuẩn hóa lên Firebase → Máy B thực thi.
+ * Máy A (máy tính bảng — điều khiển).
+ *
+ * THAY ĐỔI SO VỚI BẢN GỐC:
+ * 1. Lưu mã gần nhất vào SharedPreferences.
+ *    Khi mở app: nếu có mã cũ thì hiện nút "Kết nối lại: XXXXXX" — 1 bấm vào luôn.
+ * 2. Sau khi kết nối: nhận audio track qua WebRTC — tự phát ra loa (không cần
+ *    làm gì thêm, WebRTC route tự động).
+ * 3. Touch handler tính tọa độ chuẩn dựa trên videoRect (trừ viền đen letterbox)
+ *    để tránh lệch khi màn hình bảng khác tỉ lệ điện thoại.
+ * 4. Chuyển landscape tự động khi kết nối, trở về portrait khi ngắt.
  */
 class ControllerActivity : AppCompatActivity() {
 
-    private val database = FirebaseDatabase.getInstance().reference
-    private var connectedRoomCode: String? = null
-
-    private var signalingClient: SignalingClient? = null
-    private var peerConnectionManager: PeerConnectionManager? = null
-    private lateinit var eglBase: EglBase
-    private lateinit var remoteRenderer: SurfaceViewRenderer
-
-    // Kích thước khung hình video thật (độ phân giải màn hình Máy B), khác với kích thước
-    // của SurfaceViewRenderer trên màn hình Máy A — cần để tính đúng vùng video hiển thị
-    // (trừ phần viền đen letterbox) khi map toạ độ chạm.
-    @Volatile private var remoteFrameWidth: Int = 0
-    @Volatile private var remoteFrameHeight: Int = 0
-
-    // Chiều cao navigation bar (3 nút ≡ ○ ↩, hoặc gesture bar) của Máy A. Một số thiết bị/ROM
-    // không tự động chừa khoảng trống cho nav bar khi View dùng match_parent bên trong
-    // ConstraintLayout gốc → SurfaceViewRenderer bị vẽ đè lên vùng nav bar, đẩy video lên
-    // và làm sai lệch vùng hiển thị thật. Thay vì cố "trừ bù" tọa độ chạm theo navBarHeight
-    // (dễ sai vì event.x/y của setOnTouchListener vốn đã là tọa độ TRONG VIEW), ta lấy trực
-    // tiếp giá trị insets thật qua WindowInsets rồi set làm padding cho remoteViewContainer.
-    // Nhờ đó view (và cả videoRectRatio/touch mapping dựa trên view.width/height) luôn chỉ
-    // chiếm đúng phần màn hình phía trên nav bar, dù người dùng vẫn giữ nav bar 3 phím.
-    @Volatile private var navBarHeight: Int = 0
-
-    // Views
-    private lateinit var layoutCodeEntry: android.widget.LinearLayout
-    private lateinit var remoteViewContainer: FrameLayout
-    private lateinit var editCode: EditText
+    // ── Views ────────────────────────────────────────────────────────────────
+    private lateinit var layoutCodeEntry: LinearLayout
+    private lateinit var editPairingCode: EditText
     private lateinit var btnConnect: Button
+    private lateinit var btnLastServer: Button       // NÚT MỚI: kết nối lại mã cũ
+    private lateinit var textLastCode: TextView      // Hiện mã cũ trong nút
+    private lateinit var remoteViewContainer: View
+    private lateinit var surfaceView: SurfaceViewRenderer
+    private lateinit var btnDisconnect: Button
+    private lateinit var btnToggleKeyboard: Button
+    private lateinit var layoutKeyboardBar: LinearLayout
+    private lateinit var editRemoteText: EditText
+    private lateinit var btnKeyTab: Button
+    private lateinit var btnKeyBackspace: Button
+    private lateinit var btnKeyEsc: Button
+    private lateinit var btnKeyEnter: Button
+
+    // ── WebRTC ───────────────────────────────────────────────────────────────
+    private val eglBase: EglBase = EglBase.create()
+    private var peerConnectionManager: PeerConnectionManager? = null
+    private var signalingClient: SignalingClient? = null
+
+    // ── State ─────────────────────────────────────────────────────────────────
+    private lateinit var prefs: SharedPreferences
+    private var isConnected = false
+
+    // Vùng video thực sự trên màn hình (để tính toán tọa độ touch)
+    private var videoRect = VideoRect(0f, 0f, 0f, 0f)
+    // Kích thước gốc của màn hình Máy B (nhận qua DataChannel sau khi kết nối)
+    private var remoteW = 0; private var remoteH = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_controller)
 
-        eglBase = EglBase.create()
+        prefs = getSharedPreferences("remote_assist", MODE_PRIVATE)
 
-        layoutCodeEntry = findViewById(R.id.layout_code_entry)
+        bindViews()
+        setupSurface()
+        setupLastServerButton()
+        setupConnectButton()
+        setupDisconnect()
+        setupKeyboard()
+    }
+
+    // ── Bind ──────────────────────────────────────────────────────────────────
+
+    private fun bindViews() {
+        layoutCodeEntry     = findViewById(R.id.layout_code_entry)
+        editPairingCode     = findViewById(R.id.edit_pairing_code)
+        btnConnect          = findViewById(R.id.btn_connect)
+        btnLastServer       = findViewById(R.id.btn_last_server)
+        textLastCode        = findViewById(R.id.text_last_code)
         remoteViewContainer = findViewById(R.id.remote_view_container)
-        editCode = findViewById(R.id.edit_pairing_code)
-        btnConnect = findViewById(R.id.btn_connect)
+        surfaceView         = findViewById(R.id.surface_view)
+        btnDisconnect       = findViewById(R.id.btn_disconnect)
+        btnToggleKeyboard   = findViewById(R.id.btn_toggle_keyboard)
+        layoutKeyboardBar   = findViewById(R.id.layout_keyboard_bar)
+        editRemoteText      = findViewById(R.id.edit_remote_text)
+        btnKeyTab           = findViewById(R.id.btn_key_tab)
+        btnKeyBackspace     = findViewById(R.id.btn_key_backspace)
+        btnKeyEsc           = findViewById(R.id.btn_key_esc)
+        btnKeyEnter         = findViewById(R.id.btn_key_enter)
+    }
 
-        // Chừa đúng khoảng trống nav bar thật (đọc từ hệ thống, không đoán theo Resources)
-        // bằng cách pad container chứa SurfaceViewRenderer. FrameLayout tôn trọng padding
-        // với con match_parent, nên remoteRenderer sẽ tự co lại đúng vùng phía trên nav bar
-        // — video không bị đè, và event.x/y trong setupTouchHandling() tự động đúng theo.
-        ViewCompat.setOnApplyWindowInsetsListener(remoteViewContainer) { view, windowInsets ->
-            val navBars = windowInsets.getInsets(WindowInsetsCompat.Type.navigationBars())
-            navBarHeight = navBars.bottom
-            view.setPadding(navBars.left, view.paddingTop, navBars.right, navBars.bottom)
-            windowInsets
-        }
-        ViewCompat.requestApplyInsets(remoteViewContainer)
+    private fun setupSurface() {
+        surfaceView.init(eglBase.eglBaseContext, null)
+        surfaceView.setEnableHardwareScaler(true)
+        surfaceView.setMirror(false)
+    }
 
-        // Nút ngắt kết nối trong màn hình điều khiển
-        findViewById<Button>(R.id.btn_disconnect).setOnClickListener {
-            connectedRoomCode?.let { code ->
-                database.child("rooms").child(code).child("status").setValue("ended")
+    // ── Nút kết nối lại mã cũ ────────────────────────────────────────────────
+
+    private fun setupLastServerButton() {
+        val lastCode = prefs.getString("last_room_code", null)
+        if (lastCode != null) {
+            btnLastServer.visibility = View.VISIBLE
+            textLastCode.text = lastCode
+            btnLastServer.setOnClickListener {
+                connectTo(lastCode)
             }
-            showCodeEntry()
+        } else {
+            btnLastServer.visibility = View.GONE
         }
+    }
 
-        // Thêm SurfaceViewRenderer vào container để render video Máy B
-        remoteRenderer = SurfaceViewRenderer(this).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        }
-        remoteViewContainer.addView(remoteRenderer)
-        remoteRenderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FIT)
-        remoteRenderer.init(eglBase.eglBaseContext, object : RendererCommon.RendererEvents {
-            override fun onFirstFrameRendered() {}
-            override fun onFrameResolutionChanged(videoWidth: Int, videoHeight: Int, rotation: Int) {
-                // rotation 90/270 -> chiều rộng/cao thực tế bị hoán đổi khi hiển thị
-                if (rotation == 90 || rotation == 270) {
-                    remoteFrameWidth = videoHeight
-                    remoteFrameHeight = videoWidth
-                } else {
-                    remoteFrameWidth = videoWidth
-                    remoteFrameHeight = videoHeight
-                }
-            }
-        })
-        setupTouchHandling()
+    // ── Kết nối bằng mã nhập tay ─────────────────────────────────────────────
 
+    private fun setupConnectButton() {
         btnConnect.setOnClickListener {
-            val code = editCode.text.toString().trim()
+            val code = editPairingCode.text.toString().trim()
             if (code.length != 6) {
-                Toast.makeText(this, "Mã phải gồm 6 chữ số", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Mã phải đúng 6 số", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            connectWithCode(code)
+            connectTo(code)
         }
     }
 
-    private fun connectWithCode(code: String) {
-        btnConnect.isEnabled = false
-        btnConnect.text = "Đang kết nối..."
+    // ── Core kết nối ─────────────────────────────────────────────────────────
 
-        database.child("rooms").child(code).get().addOnSuccessListener { snapshot ->
-            if (!snapshot.exists()) {
-                Toast.makeText(this, "Mã không tồn tại hoặc đã hết hạn", Toast.LENGTH_SHORT).show()
-                btnConnect.isEnabled = true; btnConnect.text = "Kết nối"; return@addOnSuccessListener
-            }
-            val status = snapshot.child("status").getValue(String::class.java)
-            if (status == "ended") {
-                Toast.makeText(this, "Phiên này đã kết thúc", Toast.LENGTH_SHORT).show()
-                btnConnect.isEnabled = true; btnConnect.text = "Kết nối"; return@addOnSuccessListener
-            }
-            connectedRoomCode = code
-            startWebRTC(code)
-        }.addOnFailureListener {
-            Toast.makeText(this, "Lỗi kết nối Firebase: ${it.message}", Toast.LENGTH_SHORT).show()
-            btnConnect.isEnabled = true; btnConnect.text = "Kết nối"
-        }
-    }
+    private fun connectTo(code: String) {
+        if (isConnected) return
 
-    private fun startWebRTC(code: String) {
-        val sigClient = SignalingClient(
+        // Lưu mã vào prefs ngay để hiện ở lần sau
+        prefs.edit().putString("last_room_code", code).apply()
+
+        val sig = SignalingClient(
             roomCode = code,
             isHost = false,
             listener = object : SignalingClient.Listener {
                 override fun onOfferReceived(sdp: String) {
-                    Log.d(TAG, "Nhận offer từ Máy B")
                     peerConnectionManager?.handleOffer(sdp)
                 }
-                override fun onAnswerReceived(sdp: String) {} // controller không nhận answer
+                override fun onAnswerReceived(sdp: String) {}
                 override fun onIceCandidateReceived(sdpMid: String, sdpMLineIndex: Int, candidate: String) {
                     peerConnectionManager?.addIceCandidate(sdpMid, sdpMLineIndex, candidate)
                 }
-                override fun onRemoteDisconnected() {
-                    runOnUiThread {
-                        Toast.makeText(this@ControllerActivity, "Máy B đã ngắt kết nối", Toast.LENGTH_SHORT).show()
-                        showCodeEntry()
-                    }
-                }
+                override fun onRemoteDisconnected() = runOnUiThread { disconnect() }
             }
         )
-        signalingClient = sigClient
+        signalingClient = sig
 
         val pcm = PeerConnectionManager(
             context = this,
             eglBase = eglBase,
             isHost = false,
-            signalingClient = sigClient,
-            remoteSink = remoteRenderer,
-            onConnected = {
-                Log.d(TAG, "WebRTC connected!")
-                runOnUiThread {
-                    layoutCodeEntry.visibility = android.view.View.GONE
-                    remoteViewContainer.visibility = android.view.View.VISIBLE
-                    Toast.makeText(this, "Đã kết nối!", Toast.LENGTH_SHORT).show()
-                }
-            },
-            onDisconnected = {
-                runOnUiThread {
-                    Toast.makeText(this, "Mất kết nối", Toast.LENGTH_SHORT).show()
-                    showCodeEntry()
-                }
-            }
+            signalingClient = sig,
+            remoteSink = surfaceView,
+            onConnected = { runOnUiThread { onWebRtcConnected() } },
+            onDisconnected = { runOnUiThread { disconnect() } },
+            onControlMessage = { json -> handleIncomingMessage(json) }
         )
         peerConnectionManager = pcm
         pcm.init()
-        // SignalingClient đã start() trong pcm.init() → tự động lắng nghe offer từ Máy B
+        // Máy A không gọi addVideoTrackAndOffer — chỉ chờ offer từ Máy B
+        // (SignalingClient sẽ gọi onOfferReceived → pcm.handleOffer)
+        sig.startListening()
     }
 
-    private var swipeStartX = 0f
-    private var swipeStartY = 0f
-    private var swipeStartTime = 0L
-    private val commandsRef get() = connectedRoomCode?.let {
-        database.child("rooms").child(it).child("controlCommands")
+    // ── Sau khi WebRTC connected ──────────────────────────────────────────────
+
+    private fun onWebRtcConnected() {
+        isConnected = true
+        layoutCodeEntry.visibility = View.GONE
+        remoteViewContainer.visibility = View.VISIBLE
+        lockLandscape()
+        setupTouchHandler()
+        // Yêu cầu Máy B gửi kích thước màn hình
+        sendCommand(JSONObject().apply {
+            put("type", "request_screen_size")
+        })
     }
 
-    private fun setupTouchHandling() {
-        remoteRenderer.setOnTouchListener { view, event ->
-            val rect = videoRectRatio(view.width, view.height)
-                ?: VideoRect(0f, 0f, view.width.toFloat(), view.height.toFloat())
+    // ── Touch → lệnh điều khiển ───────────────────────────────────────────────
 
-            // event.y từ setOnTouchListener đã là tọa độ TRONG VIEW (relative to view),
-            // KHÔNG phải tọa độ màn hình vật lý → không cần trừ navBarHeight.
-            // navBarHeight chỉ cần thiết khi dùng getRawY() (tọa độ màn hình vật lý).
-            val adjustedY = event.y
-
-            fun toRatio(px: Float, origin: Float, size: Float) = (px - origin) / size
-
-            when (event.action) {
-                android.view.MotionEvent.ACTION_DOWN -> {
-                    swipeStartX = toRatio(event.x, rect.left, rect.width).coerceIn(0f, 1f)
-                    swipeStartY = toRatio(adjustedY, rect.top, rect.height).coerceIn(0f, 1f)
-                    swipeStartTime = System.currentTimeMillis()
+    private fun setupTouchHandler() {
+        surfaceView.setOnTouchListener { _, event ->
+            if (!isConnected) return@setOnTouchListener false
+            // Cập nhật videoRect mỗi lần layout thay đổi
+            updateVideoRect()
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+                    val (nx, ny) = normalize(event.x, event.y)
+                    sendCommand(JSONObject().apply {
+                        put("type", "touch_down")
+                        put("x", nx); put("y", ny)
+                        put("ptr", event.actionIndex)
+                    })
                 }
-                android.view.MotionEvent.ACTION_UP -> {
-                    val xEnd = toRatio(event.x, rect.left, rect.width).coerceIn(0f, 1f)
-                    val yEnd = toRatio(adjustedY, rect.top, rect.height).coerceIn(0f, 1f)
-                    val dx = xEnd - swipeStartX
-                    val dy = yEnd - swipeStartY
-                    val duration = System.currentTimeMillis() - swipeStartTime
-                    val distPx = kotlin.math.sqrt(
-                        (dx * rect.width) * (dx * rect.width) +
-                        (dy * rect.height) * (dy * rect.height)
-                    ).toDouble()
-                    if (distPx < 20) {
-                        sendCommand(mapOf("type" to "tap", "x" to swipeStartX, "y" to swipeStartY))
-                    } else {
-                        sendCommand(mapOf("type" to "swipe",
-                            "x" to swipeStartX, "y" to swipeStartY,
-                            "x2" to xEnd, "y2" to yEnd,
-                            "duration" to duration.coerceIn(80L, 1500L)))
+                MotionEvent.ACTION_MOVE -> {
+                    // Gửi tất cả pointer đang di chuyển
+                    for (i in 0 until event.pointerCount) {
+                        val (nx, ny) = normalize(event.getX(i), event.getY(i))
+                        sendCommand(JSONObject().apply {
+                            put("type", "touch_move")
+                            put("x", nx); put("y", ny)
+                            put("ptr", i)
+                        })
                     }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+                    val (nx, ny) = normalize(event.x, event.y)
+                    sendCommand(JSONObject().apply {
+                        put("type", "touch_up")
+                        put("x", nx); put("y", ny)
+                        put("ptr", event.actionIndex)
+                    })
                 }
             }
             true
         }
     }
 
-    private data class VideoRect(val left: Float, val top: Float, val width: Float, val height: Float)
+    /**
+     * Tính vùng video thực trên SurfaceView (letterbox trừ viền đen).
+     * SurfaceViewRenderer tự thêm viền đen khi tỉ lệ khác nhau.
+     */
+    private fun updateVideoRect() {
+        if (remoteW == 0 || remoteH == 0) {
+            // Chưa biết kích thước remote → dùng toàn màn hình tạm
+            videoRect = VideoRect(0f, 0f, surfaceView.width.toFloat(), surfaceView.height.toFloat())
+            return
+        }
+        val vw = surfaceView.width.toFloat()
+        val vh = surfaceView.height.toFloat()
+        val scaleX = vw / remoteW
+        val scaleY = vh / remoteH
+        val scale = minOf(scaleX, scaleY)
+        val drawW = remoteW * scale
+        val drawH = remoteH * scale
+        val left = (vw - drawW) / 2f
+        val top = (vh - drawH) / 2f
+        videoRect = VideoRect(left, top, left + drawW, top + drawH)
+    }
 
     /**
-     * Tính vùng hiển thị thật của video (loại trừ viền đen letterbox) bên trong SurfaceViewRenderer,
-     * dựa trên tỉ lệ khung hình thật của Máy B (remoteFrameWidth/Height) so với kích thước view.
-     * Trả về null nếu chưa nhận được khung hình nào (chưa biết tỉ lệ thật).
+     * Map tọa độ pixel trên SurfaceView → tọa độ chuẩn [0..1] trên màn hình Máy B.
+     * Trừ đi offset letterbox trước khi chia.
      */
-    private fun videoRectRatio(viewWidth: Int, viewHeight: Int): VideoRect? {
-        val frameW = remoteFrameWidth
-        val frameH = remoteFrameHeight
-        if (frameW <= 0 || frameH <= 0 || viewWidth <= 0 || viewHeight <= 0) return null
-
-        val videoAspect = frameW.toFloat() / frameH.toFloat()
-        val viewAspect = viewWidth.toFloat() / viewHeight.toFloat()
-
-        return if (videoAspect > viewAspect) {
-            // Video "rộng" hơn view -> lấp đầy chiều rộng, chừa viền đen trên/dưới
-            val displayedHeight = viewWidth / videoAspect
-            val top = (viewHeight - displayedHeight) / 2f
-            VideoRect(left = 0f, top = top, width = viewWidth.toFloat(), height = displayedHeight)
-        } else {
-            // Video "cao" hơn view -> lấp đầy chiều cao, chừa viền đen trái/phải
-            val displayedWidth = viewHeight * videoAspect
-            val left = (viewWidth - displayedWidth) / 2f
-            VideoRect(left = left, top = 0f, width = displayedWidth, height = viewHeight.toFloat())
-        }
+    private fun normalize(rawX: Float, rawY: Float): Pair<Float, Float> {
+        val clampedX = rawX.coerceIn(videoRect.left, videoRect.right)
+        val clampedY = rawY.coerceIn(videoRect.top, videoRect.bottom)
+        val nx = ((clampedX - videoRect.left) / (videoRect.right - videoRect.left))
+            .coerceIn(0f, 1f)
+        val ny = ((clampedY - videoRect.top) / (videoRect.bottom - videoRect.top))
+            .coerceIn(0f, 1f)
+        return Pair(nx, ny)
     }
 
-    private fun sendCommand(data: Map<String, Any>) {
-        // push() thay vì setValue() để tránh replay lệnh cũ khi InputInjectionService
-        // reconnect vào Firebase — ChildEventListener chỉ nhận lệnh MỚI thêm vào.
-        commandsRef?.push()?.setValue(data)
-            ?.addOnFailureListener { e ->
-                Log.e(TAG, "Gui lenh chạm thất bại: ${e.message}")
-                runOnUiThread {
-                    Toast.makeText(this, "Không gửi được lệnh chạm: ${e.message}", Toast.LENGTH_SHORT).show()
+    // ── Nhận message từ Máy B ────────────────────────────────────────────────
+
+    private fun handleIncomingMessage(json: String) {
+        try {
+            val obj = JSONObject(json)
+            when (obj.optString("type")) {
+                "screen_size" -> {
+                    remoteW = obj.getInt("w")
+                    remoteH = obj.getInt("h")
+                    runOnUiThread { updateVideoRect() }
                 }
             }
+        } catch (_: Exception) {}
     }
 
-    private fun showCodeEntry() {
-        layoutCodeEntry.visibility = android.view.View.VISIBLE
-        remoteViewContainer.visibility = android.view.View.GONE
-        btnConnect.isEnabled = true
-        btnConnect.text = "Kết nối"
-        releaseWebRTC()
+    // ── Gửi lệnh ─────────────────────────────────────────────────────────────
+
+    private fun sendCommand(json: JSONObject) {
+        peerConnectionManager?.sendControlCommand(json.toString())
     }
 
-    private fun releaseWebRTC() {
+    // ── Keyboard overlay ──────────────────────────────────────────────────────
+
+    private fun setupKeyboard() {
+        btnToggleKeyboard.setOnClickListener {
+            layoutKeyboardBar.visibility =
+                if (layoutKeyboardBar.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+        }
+        editRemoteText.setOnEditorActionListener { v, _, _ ->
+            val text = v.text.toString()
+            if (text.isNotEmpty()) {
+                sendCommand(JSONObject().apply {
+                    put("type", "text_input"); put("text", text)
+                })
+                v.setText("")
+            }
+            true
+        }
+        btnKeyTab.setOnClickListener { sendKey("tab") }
+        btnKeyBackspace.setOnClickListener { sendKey("backspace") }
+        btnKeyEsc.setOnClickListener { sendKey("escape") }
+        btnKeyEnter.setOnClickListener { sendKey("enter") }
+    }
+
+    private fun sendKey(key: String) {
+        sendCommand(JSONObject().apply {
+            put("type", "key_event"); put("key", key)
+        })
+    }
+
+    // ── Disconnect ────────────────────────────────────────────────────────────
+
+    private fun setupDisconnect() {
+        btnDisconnect.setOnClickListener { disconnect() }
+    }
+
+    private fun disconnect() {
+        isConnected = false
         signalingClient?.release(); signalingClient = null
         peerConnectionManager?.release(); peerConnectionManager = null
+        remoteViewContainer.visibility = View.GONE
+        layoutCodeEntry.visibility = View.VISIBLE
+        unlockOrientation()
+        // Cập nhật lại nút last server (mã vừa dùng đã được lưu)
+        setupLastServerButton()
     }
 
+    // ── Orientation ───────────────────────────────────────────────────────────
+
+    private fun lockLandscape() {
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    }
+
+    private fun unlockOrientation() {
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    }
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
     override fun onDestroy() {
-        releaseWebRTC()
-        remoteRenderer.release()
+        disconnect()
+        surfaceView.release()
         eglBase.release()
         super.onDestroy()
     }
+
+    // ── Data class ────────────────────────────────────────────────────────────
+
+    private data class VideoRect(val left: Float, val top: Float, val right: Float, val bottom: Float)
 }

@@ -1,130 +1,154 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
+<androidx.core.widget.NestedScrollView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:padding="24dp">
+    android:layout_height="match_parent">
 
-    <!-- Banner cảnh báo khi InputInjectionService chưa được bật trong Cài đặt > Hỗ trợ.
-         Tự ẩn đi (onResume) ngay khi người dùng đã bật. -->
-    <LinearLayout
-        android:id="@+id/banner_accessibility"
-        android:layout_width="0dp"
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp"
-        android:background="#FFF3CD"
-        android:visibility="gone"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        android:padding="24dp">
 
-        <TextView
-            android:layout_width="wrap_content"
+        <!-- Banner cảnh báo Accessibility chưa bật -->
+        <LinearLayout
+            android:id="@+id/banner_accessibility"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="⚠️  Cần bật Dịch vụ Hỗ trợ"
-            android:textStyle="bold"
-            android:textSize="15sp" />
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:background="#FFF3CD"
+            android:visibility="gone"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
 
-        <TextView
-            android:layout_width="wrap_content"
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⚠️  Cần bật Dịch vụ Hỗ trợ"
+                android:textStyle="bold"
+                android:textSize="15sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Vào Cài đặt › Hỗ trợ (Accessibility) › Remote Assist và bật lên."
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/btn_open_accessibility"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Mở Cài đặt Hỗ trợ"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+        </LinearLayout>
+
+        <!-- ── Phần đồng ý (lần đầu) ── -->
+        <LinearLayout
+            android:id="@+id/layout_consent_section"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="Vào Cài đặt › Hỗ trợ (Accessibility) › Remote Assist và bật lên để máy điều khiển thực hiện thao tác được."
-            android:textSize="13sp" />
-
-        <Button
-            android:id="@+id/btn_open_accessibility"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Mở Cài đặt Hỗ trợ"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
-    </LinearLayout>
-
-    <TextView
-        android:id="@+id/text_title"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:text="@string/consent_title"
-        android:textSize="22sp"
-        android:textStyle="bold"
-        android:layout_marginTop="16dp"
-        app:layout_constraintTop_toBottomOf="@id/banner_accessibility"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
-
-    <TextView
-        android:id="@+id/text_body"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="@string/consent_body"
-        android:textSize="16sp"
-        app:layout_constraintTop_toBottomOf="@id/text_title"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
-
-    <CheckBox
-        android:id="@+id/checkbox_consent"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:text="@string/consent_checkbox"
-        app:layout_constraintTop_toBottomOf="@id/text_body"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
-
-    <!-- Nút này bị vô hiệu hóa cho tới khi checkbox ở trên được tick -->
-    <Button
-        android:id="@+id/btn_generate_code"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:enabled="false"
-        android:text="@string/btn_generate_code"
-        app:layout_constraintTop_toBottomOf="@id/checkbox_consent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
-
-    <!-- Hiện sau khi tạo mã thành công -->
-    <LinearLayout
-        android:id="@+id/layout_pairing_code"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="32dp"
-        android:orientation="vertical"
-        android:visibility="gone"
-        app:layout_constraintTop_toBottomOf="@id/btn_generate_code"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
-
-        <TextView
-            android:id="@+id/text_pairing_label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/pairing_code_label" />
-
-        <TextView
-            android:id="@+id/text_pairing_code"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginTop="8dp"
-            android:letterSpacing="0.3"
-            android:textSize="40sp"
-            android:textStyle="bold"
-            tools:text="852314" />
-
-        <Button
-            android:id="@+id/btn_end_session"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
+            android:orientation="vertical"
             android:layout_marginTop="16dp"
-            android:text="@string/btn_end_session" />
-    </LinearLayout>
+            app:layout_constraintTop_toBottomOf="@id/banner_accessibility"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/consent_title"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/consent_body"
+                android:textSize="15sp" />
+
+            <CheckBox
+                android:id="@+id/checkbox_consent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/consent_checkbox" />
+
+            <Button
+                android:id="@+id/btn_generate_code"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:enabled="false"
+                android:text="@string/btn_generate_code" />
+        </LinearLayout>
+
+        <!-- ── Hiển thị mã (sau khi tạo) ── -->
+        <LinearLayout
+            android:id="@+id/layout_pairing_code"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="32dp"
+            android:gravity="center"
+            android:visibility="gone"
+            app:layout_constraintTop_toBottomOf="@id/layout_consent_section"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Mã ghép nối của máy này"
+                android:textSize="14sp"
+                android:textColor="#666666" />
+
+            <!-- Mã 6 số lớn, dễ đọc -->
+            <TextView
+                android:id="@+id/text_pairing_code"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:letterSpacing="0.3"
+                android:textSize="52sp"
+                android:textStyle="bold"
+                android:fontFamily="monospace"
+                tools:text="852314" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Mã này cố định — chia sẻ cho máy cần điều khiển"
+                android:textSize="12sp"
+                android:textColor="#888888"
+                android:gravity="center" />
+
+            <!-- Nút Tạo mã mới -->
+            <Button
+                android:id="@+id/btn_new_code"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="🔄  Tạo mã mới"
+                android:visibility="gone"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+
+            <!-- Nút Kết thúc phiên -->
+            <Button
+                android:id="@+id/btn_end_session"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:backgroundTint="#D32F2F"
+                android:text="Ngắt kết nối" />
+
+        </LinearLayout>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</androidx.core.widget.NestedScrollView>

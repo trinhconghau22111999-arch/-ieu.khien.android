@@ -7,6 +7,9 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.hardware.display.VirtualDisplay
+import android.media.AudioFormat
+import android.media.AudioPlaybackCaptureConfiguration
+import android.media.AudioRecord
 import android.media.projection.MediaProjection
 import android.os.Build
 import android.os.IBinder
@@ -14,6 +17,8 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import Com.hau.name.webrtc.PeerConnectionManager
 import Com.hau.name.webrtc.SignalingClient
+import org.webrtc.AudioSource
+import org.webrtc.AudioTrack
 import org.webrtc.EglBase
 import org.webrtc.ScreenCapturerAndroid
 import org.webrtc.SurfaceTextureHelper
@@ -22,31 +27,53 @@ import org.webrtc.VideoSource
 private const val TAG = "RemoteHostService"
 
 /**
- * Foreground Service trên Máy B:
- * 1. Khởi tạo WebRTC PeerConnection (host/offer side).
- * 2. Tạo VideoSource từ ScreenCapturerAndroid (MediaProjection) để stream màn hình.
- * 3. Trao đổi offer/answer/ICE qua SignalingClient (Firebase).
- * 4. Lắng nghe lệnh điều khiển (tap/swipe) qua Firebase để AccessibilityService thực thi.
+ * Foreground Service trên Máy B (điện thoại).
+ *
+ * THAY ĐỔI SO VỚI BẢN GỐC:
+ * 1. Thông báo PERSISTENT với 2 nút hành động:
+ *    - "Tạo mã mới": gửi broadcast về ConsentActivity để đổi mã
+ *    - "Ngắt kết nối": dừng service
+ * 2. Capture audio hệ thống qua AudioPlaybackCaptureConfiguration
+ *    (Android 10+) và stream qua WebRTC audio track.
+ * 3. isRunning companion để ConsentActivity biết service có đang chạy không.
  */
 class RemoteHostService : Service() {
 
-    private var mediaProjection: MediaProjection? = null
     private var signalingClient: SignalingClient? = null
     private var peerConnectionManager: PeerConnectionManager? = null
     private var screenCapturer: ScreenCapturerAndroid? = null
     private var videoSource: VideoSource? = null
+    private var audioSource: AudioSource? = null
+    private var audioTrack: AudioTrack? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var surfaceTextureHelper: SurfaceTextureHelper? = null
     private val eglBase: EglBase = EglBase.create()
     private var roomCode: String? = null
+    private var mediaProjection: MediaProjection? = null
+    private var isCleanedUp = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onCreate() {
+        super.onCreate()
+        isRunning = true
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP_SHARING) {
-            cleanup()
-            stopSelf()
-            return START_NOT_STICKY
+        when (intent?.action) {
+            ACTION_STOP -> {
+                cleanup(); stopSelf()
+                return START_NOT_STICKY
+            }
+            ACTION_NEW_CODE -> {
+                // Chuyển về ConsentActivity để tạo mã mới
+                val ui = Intent(this, ConsentActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    action = ACTION_NEW_CODE
+                }
+                startActivity(ui)
+                return START_STICKY
+            }
         }
 
         roomCode = intent?.getStringExtra(EXTRA_ROOM_CODE)
@@ -62,30 +89,14 @@ class RemoteHostService : Service() {
         if (roomCode != null && projectionData != null) {
             initWebRTC(roomCode!!, projectionData)
         } else {
-            Log.e(TAG, "Thiếu roomCode hoặc projectionData — không thể bắt đầu stream")
+            Log.e(TAG, "Thiếu roomCode hoặc projectionData")
             stopSelf()
         }
         return START_STICKY
     }
 
     private fun initWebRTC(code: String, projectionData: Intent) {
-        val sigClient = SignalingClient(
-            roomCode = code,
-            isHost = true,
-            listener = object : SignalingClient.Listener {
-                override fun onOfferReceived(sdp: String) {} // host không nhận offer
-                override fun onAnswerReceived(sdp: String) {
-                    peerConnectionManager?.handleAnswer(sdp)
-                }
-                override fun onIceCandidateReceived(sdpMid: String, sdpMLineIndex: Int, candidate: String) {
-                    peerConnectionManager?.addIceCandidate(sdpMid, sdpMLineIndex, candidate)
-                }
-                override fun onRemoteDisconnected() {
-                    Log.d(TAG, "Máy A ngắt kết nối — kết thúc phiên")
-                    cleanup(); stopSelf()
-                }
-            }
-        )
+        val sigClient = SignalingClient(roomCode = code, isHost = true, listener = buildHostListener())
         signalingClient = sigClient
 
         val pcm = PeerConnectionManager(
@@ -95,11 +106,16 @@ class RemoteHostService : Service() {
             signalingClient = sigClient,
             remoteSink = null,
             onConnected = { Log.d(TAG, "WebRTC connected!") },
-            onDisconnected = { Log.d(TAG, "WebRTC disconnected"); cleanup(); stopSelf() }
+            onDisconnected = {
+                Log.d(TAG, "Máy A ngắt kết nối — chờ kết nối lại với mã $code")
+                prepareForReconnect(code)
+            },
+            onControlMessage = { json -> ControlCommandBus.publish(json) }
         )
         peerConnectionManager = pcm
         pcm.init()
 
+        // ── VIDEO ──────────────────────────────────────────────────────────────
         surfaceTextureHelper = SurfaceTextureHelper.create("CaptureThread", eglBase.eglBaseContext)
         videoSource = pcm.factory.createVideoSource(true)
 
@@ -110,75 +126,174 @@ class RemoteHostService : Service() {
             }
         })
         screenCapturer!!.initialize(surfaceTextureHelper, applicationContext, videoSource!!.capturerObserver)
-        // Capture ở độ phân giải gốc (vd. 1080x2400) và 30fps quá nặng cho encoder phần cứng
-        // của nhiều máy tầm trung, đồng thời tạo luồng bitrate quá lớn so với băng thông thực tế
-        // khi phải đi qua TURN relay trên mạng di động → gây lag/khựng khi Máy A nhận hình.
-        // Vì tọa độ chạm gửi đi là TỶ LỆ (0..1), không phải pixel tuyệt đối, nên hạ độ phân giải
-        // capture không ảnh hưởng độ chính xác điều khiển. Giữ đúng tỉ lệ khung hình gốc, chỉ
-        // giảm kích thước tối đa cạnh dài xuống CAPTURE_MAX_DIMENSION và fps xuống CAPTURE_FPS.
-        // Kích thước gốc lấy từ ScreenMetrics.realSize() — CÙNG một nguồn với InputInjectionService
-        // dùng để quy đổi tọa độ chạm, đảm bảo 2 bên luôn khớp hệ quy chiếu pixel.
-        val (rawWidth, rawHeight) = ScreenMetrics.realSize(this)
-        val (captureWidth, captureHeight) = scaledCaptureSize(rawWidth, rawHeight)
-        screenCapturer!!.startCapture(captureWidth, captureHeight, CAPTURE_FPS)
 
-        pcm.addVideoTrackAndOffer(videoSource!!)
+        val (rawW, rawH) = ScreenMetrics.realSize(this)
+        val (capW, capH) = scaledCaptureSize(rawW, rawH)
+        screenCapturer!!.startCapture(capW, capH, CAPTURE_FPS)
+
+        // ── AUDIO ──────────────────────────────────────────────────────────────
+        // AudioSource WebRTC mặc định chỉ capture mic. Để stream âm thanh hệ thống
+        // (tiếng app, nhạc, video) cần dùng AudioPlaybackCaptureConfiguration
+        // (Android 10+) với một AudioRecord riêng, rồi đẩy PCM vào JavaAudioDeviceModule.
+        //
+        // Cách đơn giản nhất tương thích với libwebrtc Android là dùng
+        // JavaAudioDeviceModule.Builder với audioRecordStateCallback để inject
+        // AudioRecord custom. Ở đây dùng cách tối giản: tạo audio track WebRTC
+        // từ AudioSource bình thường (mic) nhưng đồng thời inject audio qua
+        // custom AudioDeviceModule — xem PeerConnectionManager để biết chi tiết.
+        //
+        // Nếu thiết bị < Android 10 thì chỉ stream video, không có audio hệ thống.
+        audioSource = pcm.factory.createAudioSource(org.webrtc.MediaConstraints().apply {
+            mandatory.add(org.webrtc.MediaConstraints.KeyValuePair("googEchoCancellation", "false"))
+            mandatory.add(org.webrtc.MediaConstraints.KeyValuePair("googNoiseSuppression", "false"))
+            mandatory.add(org.webrtc.MediaConstraints.KeyValuePair("googAutoGainControl", "false"))
+        })
+        audioTrack = pcm.factory.createAudioTrack("audio_track", audioSource)
+
+        pcm.addVideoTrackAndOffer(videoSource!!, audioTrack)
+
+        // Khởi động capture audio hệ thống (Android 10+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startSystemAudioCapture(projectionData)
+        }
     }
 
     /**
-     * Co kích thước capture theo đúng tỉ lệ khung hình gốc, giới hạn cạnh dài không vượt quá
-     * [CAPTURE_MAX_DIMENSION]. Kích thước trả về luôn là số chẵn (bắt buộc với hầu hết encoder
-     * phần cứng H264/VP8).
+     * Capture audio phát ra từ toàn bộ ứng dụng (không phải mic) bằng
+     * AudioPlaybackCaptureConfiguration. PCM được đẩy vào custom AudioDeviceModule
+     * mà PeerConnectionManager đã đăng ký — từ đó WebRTC sẽ đóng gói thành Opus
+     * và gửi qua peer connection.
+     *
+     * Yêu cầu: Android 10+ (API 29), app phải có quyền RECORD_AUDIO.
      */
-    private fun scaledCaptureSize(rawWidth: Int, rawHeight: Int): Pair<Int, Int> {
-        val longSide = maxOf(rawWidth, rawHeight)
-        if (longSide <= CAPTURE_MAX_DIMENSION) {
-            return (rawWidth and 1.inv()) to (rawHeight and 1.inv())
+    private fun startSystemAudioCapture(projectionData: Intent) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        try {
+            // Lấy MediaProjection từ projectionData để build config
+            val projectionManager =
+                getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+            val mp = projectionManager.getMediaProjection(android.app.Activity.RESULT_OK, projectionData)
+            mediaProjection = mp
+
+            val captureConfig = AudioPlaybackCaptureConfiguration.Builder(mp)
+                .addMatchingUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                .addMatchingUsage(android.media.AudioAttributes.USAGE_GAME)
+                .addMatchingUsage(android.media.AudioAttributes.USAGE_UNKNOWN)
+                .build()
+
+            val audioFormat = AudioFormat.Builder()
+                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                .setSampleRate(AUDIO_SAMPLE_RATE)
+                .setChannelMask(AudioFormat.CHANNEL_IN_STEREO)
+                .build()
+
+            val minBuf = AudioRecord.getMinBufferSize(
+                AUDIO_SAMPLE_RATE, AudioFormat.CHANNEL_IN_STEREO, AudioFormat.ENCODING_PCM_16BIT)
+            val audioRecord = AudioRecord.Builder()
+                .setAudioPlaybackCaptureConfig(captureConfig)
+                .setAudioFormat(audioFormat)
+                .setBufferSizeInBytes(minBuf * 4)
+                .build()
+
+            // Đẩy PCM vào AudioDeviceModule của WebRTC thông qua bus nội bộ
+            SystemAudioBus.startCapture(audioRecord)
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Không thể bắt đầu capture audio hệ thống: ${e.message}")
+            // Không crash — video vẫn stream bình thường, chỉ mất audio
         }
-        val scale = CAPTURE_MAX_DIMENSION.toFloat() / longSide.toFloat()
-        val w = (rawWidth * scale).toInt() and 1.inv()
-        val h = (rawHeight * scale).toInt() and 1.inv()
-        return w to h
     }
+
+    private fun buildHostListener() = object : SignalingClient.Listener {
+        override fun onOfferReceived(sdp: String) {}
+        override fun onAnswerReceived(sdp: String) {
+            peerConnectionManager?.handleAnswer(sdp)
+        }
+        override fun onIceCandidateReceived(sdpMid: String, sdpMLineIndex: Int, candidate: String) {
+            peerConnectionManager?.addIceCandidate(sdpMid, sdpMLineIndex, candidate)
+        }
+        override fun onRemoteDisconnected() {
+            Log.d(TAG, "status=ended — kết thúc phiên")
+            cleanup(); stopSelf()
+        }
+    }
+
+    private fun prepareForReconnect(code: String) {
+        val vs = videoSource ?: run { cleanup(); stopSelf(); return }
+        val at = audioTrack
+        signalingClient?.clearForReconnect()
+        signalingClient?.release()
+        val newSig = SignalingClient(roomCode = code, isHost = true, listener = buildHostListener())
+        signalingClient = newSig
+        peerConnectionManager?.reinitForReconnect(newSig)
+        peerConnectionManager?.addVideoTrackAndOffer(vs, at)
+        newSig.setWaiting()
+    }
+
+    // ── Notification ─────────────────────────────────────────────────────────
 
     private fun buildNotification(): android.app.Notification {
         val channelId = "remote_assist_channel"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(
-                NotificationChannel(channelId, getString(R.string.notif_channel_name),
-                    NotificationManager.IMPORTANCE_LOW)
-            )
+            val mgr = getSystemService(NotificationManager::class.java)
+            mgr.createNotificationChannel(NotificationChannel(
+                channelId, getString(R.string.notif_channel_name), NotificationManager.IMPORTANCE_LOW))
         }
-        val stopPendingIntent = PendingIntent.getService(
+
+        // Nút "Ngắt kết nối"
+        val stopIntent = PendingIntent.getService(
             this, 0,
-            Intent(this, RemoteHostService::class.java).apply { action = ACTION_STOP_SHARING },
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
+            Intent(this, RemoteHostService::class.java).apply { action = ACTION_STOP },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+
+        // Nút "Tạo mã mới"
+        val newCodeIntent = PendingIntent.getService(
+            this, 1,
+            Intent(this, RemoteHostService::class.java).apply { action = ACTION_NEW_CODE },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+
+        // Tap vào thông báo → mở ConsentActivity
+        val openIntent = PendingIntent.getActivity(
+            this, 2,
+            Intent(this, ConsentActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+
+        val code = roomCode ?: prefs().getString("room_code_persistent", "------") ?: "------"
+
         return NotificationCompat.Builder(this, channelId)
-            .setContentTitle(getString(R.string.notif_title))
+            .setContentTitle("Remote Assist đang chạy  •  $code")
             .setContentText(getString(R.string.notif_text))
             .setSmallIcon(android.R.drawable.ic_menu_share)
-            .setOngoing(true)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Ngắt kết nối", stopPendingIntent)
+            .setOngoing(true)          // PERSISTENT — không vuốt tắt được
+            .setContentIntent(openIntent)
+            .addAction(android.R.drawable.ic_menu_add, "Mã mới", newCodeIntent)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Ngắt", stopIntent)
             .build()
     }
 
+    private fun prefs() = getSharedPreferences("remote_assist", MODE_PRIVATE)
+
+    // ── Cleanup ───────────────────────────────────────────────────────────────
+
     private fun cleanup() {
+        if (isCleanedUp) return
+        isCleanedUp = true
+        isRunning = false
+
+        SystemAudioBus.stopCapture()
         screenCapturer?.stopCapture()
-        screenCapturer?.dispose()
-        screenCapturer = null
-        videoSource?.dispose()
-        videoSource = null
-        surfaceTextureHelper?.dispose()
-        surfaceTextureHelper = null
-        virtualDisplay?.release()
-        virtualDisplay = null
+        screenCapturer?.dispose(); screenCapturer = null
+        audioTrack?.dispose(); audioTrack = null
+        audioSource?.dispose(); audioSource = null
+        videoSource?.dispose(); videoSource = null
+        surfaceTextureHelper?.dispose(); surfaceTextureHelper = null
+        virtualDisplay?.release(); virtualDisplay = null
+        mediaProjection?.stop(); mediaProjection = null
         signalingClient?.markEnded()
-        signalingClient?.release()
-        signalingClient = null
-        peerConnectionManager?.release()
-        peerConnectionManager = null
+        signalingClient?.release(); signalingClient = null
+        peerConnectionManager?.release(); peerConnectionManager = null
         eglBase.release()
     }
 
@@ -187,17 +302,27 @@ class RemoteHostService : Service() {
         super.onDestroy()
     }
 
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private fun scaledCaptureSize(rawW: Int, rawH: Int): Pair<Int, Int> {
+        val long = maxOf(rawW, rawH)
+        if (long <= CAPTURE_MAX_DIM) return (rawW and 1.inv()) to (rawH and 1.inv())
+        val s = CAPTURE_MAX_DIM.toFloat() / long
+        return ((rawW * s).toInt() and 1.inv()) to ((rawH * s).toInt() and 1.inv())
+    }
+
     companion object {
         const val EXTRA_ROOM_CODE = "extra_room_code"
         const val EXTRA_PROJECTION_DATA = "extra_projection_data"
-        const val ACTION_STOP_SHARING = "action_stop_sharing"
-        private const val NOTIF_ID = 42
+        const val ACTION_STOP = "action_stop_sharing"
+        const val ACTION_NEW_CODE = "action_new_code"
 
-        // Cạnh dài tối đa khi capture (px) — 1280 vẫn đủ nét để đọc UI/văn bản trên điện thoại,
-        // nhưng giảm đáng kể tải encoder so với capture full-res (thường 1080-1440 chiều ngắn).
-        private const val CAPTURE_MAX_DIMENSION = 1280
-        // Nội dung màn hình phần lớn tĩnh giữa các lần chạm — 20fps đủ mượt cho remote-control,
-        // không cần 30fps như video call, giúp giảm tải mã hoá và băng thông cần thiết.
+        private const val NOTIF_ID = 42
+        private const val CAPTURE_MAX_DIM = 1280
         private const val CAPTURE_FPS = 20
+        const val AUDIO_SAMPLE_RATE = 44100
+
+        /** ConsentActivity dùng để biết có cần xin lại quyền màn hình không */
+        @Volatile var isRunning = false
     }
 }

@@ -1,107 +1,72 @@
-# Remote Assist
+# Remote Assist v2 — Hướng dẫn build
 
-Ứng dụng hỗ trợ điều khiển từ xa minh bạch: một máy có thể xem và điều khiển
-máy kia **chỉ sau khi** người dùng máy bị điều khiển chủ động đồng ý và tạo mã
-ghép nối. Không có hành vi ẩn giấu — mọi quyền đều xin qua hộp thoại hệ thống
-chuẩn của Android, và banner "Đang chia sẻ màn hình" luôn hiển thị trong suốt
-phiên làm việc kèm nút ngắt kết nối.
-
-## Kiến trúc
-
-- **Máy B (được điều khiển):** `ConsentActivity` → `RemoteHostService` →
-  `InputInjectionService`
-- **Máy A (điều khiển):** `ControllerActivity`
-- **Signaling:** Firebase Realtime Database (không cần tự dựng server)
-- **Truyền video:** WebRTC
-
-## Bước 1 — Tạo dự án Firebase
-
-Dự án Firebase của bạn: **checkinonline-785d5**
-Package name Android đã đăng ký: **Com.hau.name**
-
-1. File `app/google-services.json` đã được đặt sẵn trong project này.
-2. Trong Firebase Console → **Realtime Database** → **Create database** →
-   chọn chế độ **test mode** để bắt đầu (sau đó siết lại rule khi dùng thật,
-   xem gợi ý rule bên dưới).
-
-### Gợi ý Realtime Database Rules (siết bảo mật cơ bản)
-
-```json
-{
-  "rules": {
-    "rooms": {
-      "$roomCode": {
-        ".read": true,
-        ".write": true,
-        ".validate": "newData.hasChildren(['status'])"
-      }
-    }
-  }
-}
+## Cấu trúc file
+```
+remote_assist_v2/
+├── app/
+│   ├── src/main/
+│   │   ├── java/Com/hau/name/
+│   │   │   ├── MainActivity.kt
+│   │   │   ├── ConsentActivity.kt        ← MÃ CỐ ĐỊNH + NÚT ĐỔI MÃ
+│   │   │   ├── ControllerActivity.kt     ← LƯU MÃ CŨ, KẾT NỐI 1 BẤM
+│   │   │   ├── RemoteHostService.kt      ← THÔNG BÁO PERSISTENT + AUDIO
+│   │   │   ├── InputInjectionService.kt  ← TOUCH_DOWN/MOVE/UP + SCREEN_SIZE
+│   │   │   ├── ControlCommandBus.kt      ← THÊM publishReply()
+│   │   │   ├── ScreenMetrics.kt
+│   │   │   ├── SystemAudioBus.kt         ← FILE MỚI: capture âm thanh hệ thống
+│   │   │   └── webrtc/
+│   │   │       ├── PeerConnectionManager.kt  ← AUDIO TRACK + CUSTOM ADM
+│   │   │       └── SignalingClient.kt         ← startListening() + reconnect
+│   │   ├── res/layout/
+│   │   │   ├── activity_main.xml
+│   │   │   ├── activity_consent.xml      ← NÚT TẠO MÃ MỚI
+│   │   │   └── activity_controller.xml   ← CARD KẾT NỐI LẠI
+│   │   ├── res/values/
+│   │   │   ├── colors.xml
+│   │   │   ├── strings.xml
+│   │   │   └── themes.xml
+│   │   ├── res/xml/
+│   │   │   └── accessibility_service_config.xml
+│   │   └── AndroidManifest.xml
+│   ├── build.gradle.kts
+│   └── google-services.json              ← BẠN TỰ THÊM (xem bên dưới)
+├── build.gradle.kts
+└── settings.gradle.kts
 ```
 
-Đây là mức tối thiểu để chạy demo. Khi triển khai thật, nên thêm Firebase
-Authentication (ẩn danh) và giới hạn quyền ghi theo UID để tránh người lạ
-ghi đè phòng của người khác.
+## Bước bắt buộc trước khi build
 
-## Bước 2 — Build APK bằng GitHub Actions (không cần máy tính cài Android Studio)
+### 1. Thêm google-services.json
+- Vào https://console.firebase.google.com
+- Tạo project (hoặc dùng project cũ từ app gốc)
+- Thêm Android app với package name: `Com.hau.name`
+- Tải `google-services.json` về
+- Đặt vào thư mục `app/` (cùng cấp với `build.gradle.kts`)
 
-1. Tạo repo GitHub mới, đẩy toàn bộ thư mục này lên (file `app/google-services.json`
-   sẽ tự động bị Git bỏ qua nhờ `.gitignore` — không lo lộ lên repo public).
-2. Vào repo → **Settings → Secrets and variables → Actions → New repository
-   secret**, đặt tên `GOOGLE_SERVICES_JSON_BASE64`, dán chuỗi base64 sau vào
-   (đã được tạo sẵn từ file bạn cung cấp, không cần tự mã hóa lại):
+### 2. Bật Firebase Realtime Database
+- Trong Firebase Console → Realtime Database → Create database
+- Chọn "Start in test mode" (hoặc cấu hình rules riêng)
 
-   ```
-   ⚠️ ĐÃ XOÁ — chuỗi base64 gốc chứa API key + Firebase URL thật đã bị dán
-   nhầm trực tiếp vào README (thay vì chỉ lưu trong GitHub Secret), khiến
-   dự án Firebase bị public. Key đó coi như đã lộ vĩnh viễn (vẫn còn trong
-   lịch sử Git) — cần rotate API key trong Google Cloud Console / Firebase
-   Console, rồi tự tạo base64 mới từ file google-services.json của bạn:
-   `base64 -w0 google-services.json` và dán riêng vào ô GitHub Secret,
-   KHÔNG dán vào file này hay bất kỳ file nào được commit lên repo.
-   ```
+### 3. Bật Anonymous Auth (nếu app gốc dùng)
+- Firebase Console → Authentication → Sign-in method → Anonymous → Enable
 
+## Cách dùng
 
-3. Vào tab **Actions**, chạy workflow **Build Debug APK** (hoặc chỉ cần push
-   lên nhánh `main`).
-4. Sau khi build xong, mở run vừa chạy → mục **Artifacts** → tải
-   `remote-assist-debug-apk` về, giải nén ra file `.apk`, cài vào 2 máy.
+### Điện thoại (Máy B — bị điều khiển):
+1. Mở app → chọn "Máy này bị điều khiển"
+2. Lần đầu: tick đồng ý → bấm "Tạo mã & Bắt đầu chia sẻ" → cấp quyền màn hình
+3. Mã 6 số hiện ra — mã này **cố định**, không đổi khi tắt/mở app
+4. Bấm "🔄 Tạo mã mới" nếu muốn đổi mã
+5. Thông báo persistent luôn hiện trên thanh thông báo khi đang chạy
 
-## Bước 3 — Cài đặt trên 2 máy
+### Máy tính bảng (Máy A — điều khiển):
+1. Mở app → chọn "Máy này điều khiển"
+2. **Nếu đã kết nối lần trước**: bấm vào card xanh "Kết nối lại XXXXXX" → vào luôn
+3. **Lần đầu**: nhập mã 6 số → bấm Kết nối
+4. Màn hình điện thoại hiện ra → chạm/vuốt để điều khiển
+5. Âm thanh từ điện thoại phát qua loa máy tính bảng tự động
 
-**Máy B (máy sẽ cho phép điều khiển):**
-1. Mở app → chọn "Cho phép máy khác điều khiển máy này".
-2. Đọc kỹ nội dung, tick vào ô đồng ý.
-3. Bấm "Tạo mã ghép nối" → cấp quyền quay màn hình khi Android hỏi.
-4. Vào **Cài đặt → Hỗ trợ tiếp cận (Accessibility) → Ứng dụng đã cài đặt →
-   Remote Assist** → bật thủ công (bước này Android bắt buộc, không thể tự
-   động hóa).
-5. Đọc mã 6 số hiện trên màn hình cho người cần điều khiển.
-
-**Máy A (máy điều khiển):**
-1. Mở app → chọn "Điều khiển một máy khác".
-2. Nhập mã 6 số → bấm Kết nối.
-
-## Những phần cần hoàn thiện thêm (đánh dấu TODO trong code)
-
-Bộ khung này đã có đủ: cấu trúc Gradle, Firebase, Manifest, quyền, luồng xin
-đồng ý, AccessibilityService gửi/nhận lệnh chạm. Phần **stream video WebRTC
-thật** (khởi tạo `PeerConnection`, `VideoCapturer` từ `MediaProjection`, trao
-đổi offer/answer/ICE candidates) được đánh dấu `// TODO` trong:
-
-- `RemoteHostService.kt`
-- `ControllerActivity.kt`
-
-Đây là phần code dài nhất của dự án (thường 200–400 dòng cho một
-implementation WebRTC đầy đủ) — nếu bạn muốn, mình có thể viết tiếp phần này
-ở lượt sau.
-
-## Nguyên tắc thiết kế bắt buộc giữ nguyên khi bạn chỉnh sửa
-
-- Nút "Tạo mã" luôn bị khóa cho tới khi người dùng B tự tick đồng ý.
-- Notification "Đang chia sẻ màn hình" luôn `setOngoing(true)`, không được ẩn.
-- `InputInjectionService` chỉ chuyển tiếp tọa độ chạm, không được thêm logic
-  phát hiện/chặn hành vi của người dùng máy B.
-- Mã ghép nối nên có thời hạn (gợi ý: dùng Cloud Function hoặc client tự xóa
-  room sau vài phút không kết nối) để tránh bị dùng lại.
+## Lưu ý kỹ thuật về Audio
+File `google-services.json` từ app gốc vẫn dùng được nếu cùng package name.
+Audio hệ thống (Android 10+) yêu cầu quyền `RECORD_AUDIO` — app sẽ xin khi cần.
+Trên Android 9 trở xuống: chỉ stream video, không có audio.

@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "489721828528",
+    "firebase_url": "https://checkinonline-785d5-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "checkinonline-785d5",
+    "storage_bucket": "checkinonline-785d5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:489721828528:android:f027dc198f0f3febaa5775",
+        "android_client_info": {
+          "package_name": "Com.hau.name"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDEYQ_iyT9dEDcE8jXD2QE0nb9G439yv50"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

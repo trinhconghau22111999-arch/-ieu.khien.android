@@ -5,9 +5,9 @@ import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 
 /**
- * Màn hình đầu tiên: người dùng chọn vai trò của máy này.
- * - "Máy được điều khiển" (Máy B) -> ConsentActivity
- * - "Máy điều khiển" (Máy A) -> ControllerActivity
+ * Màn hình đầu tiên: chọn vai trò.
+ * - "Cho phép máy khác điều khiển" → ConsentActivity (Máy B)
+ * - "Điều khiển một máy khác"       → ControllerActivity (Máy A)
  */
 class MainActivity : AppCompatActivity() {
 
