@@ -319,7 +319,7 @@ class RemoteHostService : Service() {
 
         private const val NOTIF_ID = 42
         private const val CAPTURE_MAX_DIM = 1280
-        private const val CAPTURE_FPS = 40
+        private const val CAPTURE_FPS = 30
         const val AUDIO_SAMPLE_RATE = 44100
 
         /** ConsentActivity dùng để biết có cần xin lại quyền màn hình không */
