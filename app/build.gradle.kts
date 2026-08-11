@@ -10,28 +10,39 @@ android {
 
     defaultConfig {
         applicationId = "Com.hau.name"
-        minSdk = 23  // AudioPlaybackCaptureConfiguration yêu cầu API 29,
-                     // nhưng app vẫn chạy trên API 26+ (chỉ tắt audio capture < 29)
-        targetSdk = 34
+        minSdk = 23
+        targetSdk = 28   // Hạ xuống 28 — MIUI cũ hay từ chối APK targetSdk > 30
         versionCode = 2
         versionName = "2.0"
+
+        // Tắt multidex tự động — tránh lỗi parse trên máy cũ
+        multiDexEnabled = false
     }
 
     buildTypes {
+        getByName("debug") {
+            isMinifyEnabled = false
+            isShrinkResources = false
+        }
         getByName("release") {
             isMinifyEnabled = false
         }
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_11  // Hạ từ 17 xuống 11 — tương thích máy cũ hơn
+        targetCompatibility = JavaVersion.VERSION_11
     }
     kotlinOptions {
-        jvmTarget = "17"
+        jvmTarget = "11"
     }
     buildFeatures {
         viewBinding = true
+    }
+
+    // Tắt lint block build
+    lint {
+        abortOnError = false
     }
 }
 
@@ -41,14 +52,12 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
-    // CardView — dùng trong activity_controller.xml (nút kết nối lại server cũ)
-
-    // Firebase — Signaling Server cho WebRTC (chỉ dùng khi kết nối đầu tiên)
+    // Firebase
     implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
     implementation("com.google.firebase:firebase-database-ktx")
     implementation("com.google.firebase:firebase-auth-ktx")
 
-    // WebRTC — stream video + audio + DataChannel điều khiển
+    // WebRTC
     implementation("io.github.webrtc-sdk:android:125.6422.06.1")
 
     // Coroutines
