@@ -113,7 +113,7 @@ class SignalingClient(
                 Log.d(TAG, "Nhận offer")
                 listener.onOfferReceived(sdp)
             }
-            override fun onCancelled(e: DatabaseError) = Log.e(TAG, "offer listen error: $e")
+            override fun onCancelled(e: DatabaseError) { Log.e(TAG, "offer listen error: $e") }
         }
         ref.addValueEventListener(l)
         listeners.add(ref to l)
@@ -127,7 +127,7 @@ class SignalingClient(
                 Log.d(TAG, "Nhận answer")
                 listener.onAnswerReceived(sdp)
             }
-            override fun onCancelled(e: DatabaseError) = Log.e(TAG, "answer listen error: $e")
+            override fun onCancelled(e: DatabaseError) { Log.e(TAG, "answer listen error: $e") }
         }
         ref.addValueEventListener(l)
         listeners.add(ref to l)
@@ -145,7 +145,7 @@ class SignalingClient(
                     listener.onIceCandidateReceived(mid, idx, cand)
                 }
             }
-            override fun onCancelled(e: DatabaseError) = Log.e(TAG, "ice listen error: $e")
+            override fun onCancelled(e: DatabaseError) { Log.e(TAG, "ice listen error: $e") }
         }
         ref.addValueEventListener(l)
         listeners.add(ref to l)
@@ -160,7 +160,7 @@ class SignalingClient(
                     listener.onRemoteDisconnected()
                 }
             }
-            override fun onCancelled(e: DatabaseError) = Log.e(TAG, "status listen error: $e")
+            override fun onCancelled(e: DatabaseError) { Log.e(TAG, "status listen error: $e") }
         }
         ref.addValueEventListener(l)
         listeners.add(ref to l)

@@ -159,15 +159,15 @@ class PeerConnectionManager(
         dataChannel?.registerObserver(buildDataChannelObserver())
 
         // Tạo offer
-        pc.createOffer(buildSdpObserver { sdp ->
-            pc.setLocalDescription(buildSdpObserver { }, sdp)
+        pc.createOffer(buildCreateSdpObserver { sdp ->
+            pc.setLocalDescription(buildSetSdpObserver { }, sdp)
             signalingClient.sendOffer(sdp.description)
         }, MediaConstraints())
     }
 
     fun handleAnswer(sdpStr: String) {
         peerConnection?.setRemoteDescription(
-            buildSdpObserver { },
+            buildSetSdpObserver { },
             SessionDescription(SessionDescription.Type.ANSWER, sdpStr)
         )
     }
@@ -287,18 +287,18 @@ class PeerConnectionManager(
     fun handleOffer(sdpStr: String) {
         val pc = createPeerConnection() ?: return
         pc.setRemoteDescription(
-            buildSdpObserver { },
+            buildSetSdpObserver { },
             SessionDescription(SessionDescription.Type.OFFER, sdpStr)
         )
-        pc.createAnswer(buildSdpObserver { sdp ->
-            pc.setLocalDescription(buildSdpObserver { }, sdp)
+        pc.createAnswer(buildCreateSdpObserver { sdp ->
+            pc.setLocalDescription(buildSetSdpObserver { }, sdp)
             signalingClient.sendAnswer(sdp.description)
         }, MediaConstraints())
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private fun buildSdpObserver(onSuccess: (SessionDescription) -> Unit) =
+    private fun buildCreateSdpObserver(onSuccess: (SessionDescription) -> Unit) =
         object : SdpObserver {
             override fun onCreateSuccess(sdp: SessionDescription) = onSuccess(sdp)
             override fun onSetSuccess() {}
@@ -306,7 +306,7 @@ class PeerConnectionManager(
             override fun onSetFailure(err: String?) { Log.e(TAG, "SDP set fail: $err") }
         }
 
-    private fun buildSdpObserver(onSet: () -> Unit) =
+    private fun buildSetSdpObserver(onSet: () -> Unit) =
         object : SdpObserver {
             override fun onCreateSuccess(sdp: SessionDescription) {}
             override fun onSetSuccess() = onSet()
