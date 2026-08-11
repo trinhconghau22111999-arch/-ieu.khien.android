@@ -91,15 +91,15 @@ class ControllerActivity : AppCompatActivity() {
     }
 
     // ── Fix 2: Ẩn status bar + navigation bar (toàn màn hình thật sự) ────────
+    @Suppress("DEPRECATION")
     private fun hideSystemUI() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
             window.insetsController?.let {
                 it.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
                 it.systemBarsBehavior =
                     WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             }
         } else {
-            @Suppress("DEPRECATION")
             window.decorView.systemUiVisibility = (
                 View.SYSTEM_UI_FLAG_FULLSCREEN
                 or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
@@ -110,12 +110,12 @@ class ControllerActivity : AppCompatActivity() {
         }
     }
 
+    @Suppress("DEPRECATION")
     private fun showSystemUI() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
             window.insetsController?.show(
                 WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
         } else {
-            @Suppress("DEPRECATION")
             window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
         }
     }

@@ -10,7 +10,7 @@ android {
 
     defaultConfig {
         applicationId = "Com.hau.name"
-        minSdk = 26  // AudioPlaybackCaptureConfiguration yêu cầu API 29,
+        minSdk = 24  // AudioPlaybackCaptureConfiguration yêu cầu API 29,
                      // nhưng app vẫn chạy trên API 26+ (chỉ tắt audio capture < 29)
         targetSdk = 34
         versionCode = 2
