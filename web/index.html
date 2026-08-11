@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#111111">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Remote Assist</title>
+<link rel="manifest" href="manifest.json">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { background:#111; color:#fff; font-family:sans-serif; height:100dvh; overflow:hidden; display:flex; flex-direction:column; }
+
+  /* ── Màn hình nhập mã ── */
+  #screen-connect {
+    flex:1; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; padding:32px; gap:16px;
+  }
+  #screen-connect h1 { font-size:28px; font-weight:700; }
+  #screen-connect p  { color:#aaa; font-size:14px; margin-top:-8px; }
+
+  #card-last {
+    width:100%; background:#1E3A5F; border-radius:12px;
+    padding:20px; text-align:center; cursor:pointer;
+    display:none; gap:6px; flex-direction:column;
+  }
+  #card-last .label { color:#7EB8F7; font-size:12px; }
+  #card-last .code  { color:#fff; font-size:36px; font-weight:700; font-family:monospace; letter-spacing:4px; }
+  #card-last .hint  { color:#7EB8F7; font-size:11px; }
+
+  .divider { color:#555; font-size:12px; width:100%; text-align:center; }
+
+  #input-code {
+    width:100%; padding:14px; background:#222; border:1px solid #444;
+    border-radius:8px; color:#fff; font-size:28px; font-family:monospace;
+    text-align:center; letter-spacing:6px; outline:none;
+  }
+  #btn-connect {
+    width:100%; padding:14px; background:#1565C0; border:none;
+    border-radius:8px; color:#fff; font-size:16px; font-weight:600; cursor:pointer;
+  }
+  #btn-connect:active { background:#0D47A1; }
+  #status { color:#aaa; font-size:13px; min-height:20px; }
+
+  /* ── Màn hình xem video ── */
+  #screen-remote {
+    flex:1; position:relative; display:none; background:#000;
+  }
+  #remote-video {
+    width:100%; height:100%; object-fit:contain;
+  }
+
+  /* Overlay controls — ẩn mặc định, chạm góc trên phải để hiện */
+  #overlay {
+    position:absolute; inset:0; pointer-events:none;
+    display:flex; flex-direction:column;
+  }
+  #top-bar {
+    display:flex; justify-content:flex-end; padding:12px;
+    opacity:0; transition:opacity 0.3s; pointer-events:none;
+  }
+  #top-bar.show { opacity:1; pointer-events:all; }
+  #btn-disconnect {
+    background:rgba(0,0,0,0.6); border:1px solid #555;
+    color:#fff; padding:8px 16px; border-radius:8px;
+    font-size:14px; cursor:pointer;
+  }
+
+  /* Bàn phím overlay */
+  #keyboard-bar {
+    position:absolute; bottom:0; left:0; right:0;
+    background:rgba(0,0,0,0.85); padding:8px;
+    display:none; flex-direction:column; gap:6px;
+  }
+  #keyboard-bar.show { display:flex; }
+  #input-text {
+    background:transparent; border:none; border-bottom:1px solid #555;
+    color:#fff; font-size:16px; padding:6px; outline:none; width:100%;
+  }
+  .key-row { display:flex; gap:6px; }
+  .key-btn {
+    flex:1; padding:10px 0; background:#333; border:none;
+    color:#fff; border-radius:6px; font-size:14px; cursor:pointer;
+  }
+  .key-btn:active { background:#555; }
+
+  #btn-keyboard {
+    position:absolute; bottom:16px; right:16px;
+    background:rgba(0,0,0,0.6); border:1px solid #555;
+    color:#fff; width:48px; height:48px; border-radius:50%;
+    font-size:20px; cursor:pointer; display:flex;
+    align-items:center; justify-content:center;
+    opacity:0; transition:opacity 0.3s; pointer-events:none;
+  }
+  #btn-keyboard.show { opacity:1; pointer-events:all; }
+
+  #connecting-overlay {
+    position:absolute; inset:0; background:#000;
+    display:flex; align-items:center; justify-content:center;
+    font-size:18px; color:#aaa;
+  }
+</style>
+</head>
+<body>
+
+<!-- Màn hình nhập mã -->
+<div id="screen-connect">
+  <h1>Remote Assist</h1>
+  <p>Máy điều khiển (Web)</p>
+
+  <div id="card-last" onclick="connectToLast()">
+    <div class="label">Kết nối lại</div>
+    <div class="code" id="last-code-display">------</div>
+    <div class="hint">Bấm để kết nối ngay</div>
+  </div>
+
+  <div class="divider">─── hoặc nhập mã mới ───</div>
+
+  <input id="input-code" type="number" maxlength="6"
+    placeholder="Mã 6 số" inputmode="numeric" />
+
+  <button id="btn-connect" onclick="connectToCode()">Kết nối</button>
+  <div id="status"></div>
+</div>
+
+<!-- Màn hình xem video -->
+<div id="screen-remote">
+  <video id="remote-video" autoplay playsinline></video>
+
+  <div id="connecting-overlay">Đang kết nối...</div>
+
+  <div id="overlay">
+    <div id="top-bar">
+      <button id="btn-disconnect" onclick="disconnect()">Ngắt kết nối</button>
+    </div>
+  </div>
+
+  <button id="btn-keyboard" onclick="toggleKeyboard()">⌨</button>
+
+  <div id="keyboard-bar">
+    <input id="input-text" type="text" placeholder="Gõ để gửi sang điện thoại" />
+    <div class="key-row">
+      <button class="key-btn" onclick="sendKey('tab')">Tab</button>
+      <button class="key-btn" onclick="sendKey('backspace')">⌫</button>
+      <button class="key-btn" onclick="sendKey('escape')">Esc</button>
+      <button class="key-btn" onclick="sendKey('enter')" id="btn-enter">↵</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<script>
+// ── Firebase config (lấy từ google-services.json) ──────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyDEYQ_iyT9dEDcE8jXD2QE0nb9G439yv50",
+  authDomain: "checkinonline-785d5.firebaseapp.com",
+  databaseURL: "https://checkinonline-785d5-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "checkinonline-785d5",
+  storageBucket: "checkinonline-785d5.firebasestorage.app"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// ── State ──────────────────────────────────────────────────────────────────
+let pc = null;
+let roomCode = null;
+let dataChannel = null;
+let hideTimer = null;
+let lastSentText = "";
+
+const ICE_SERVERS = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
+  {
+    urls: "turn:openrelay.metered.ca:80",
+    username: "openrelayproject", credential: "openrelayproject"
+  },
+  {
+    urls: "turn:openrelay.metered.ca:443",
+    username: "openrelayproject", credential: "openrelayproject"
+  }
+];
+
+// ── Khởi động ──────────────────────────────────────────────────────────────
+window.onload = () => {
+  const last = localStorage.getItem("last_room_code");
+  if (last) {
+    document.getElementById("card-last").style.display = "flex";
+    document.getElementById("last-code-display").textContent = last;
+  }
+  document.getElementById("input-code").addEventListener("input", e => {
+    if (e.target.value.length > 6)
+      e.target.value = e.target.value.slice(0, 6);
+  });
+  // Gửi text theo từng ký tự mới
+  document.getElementById("input-text").addEventListener("input", e => {
+    const cur = e.target.value;
+    if (cur.length > lastSentText.length) {
+      const newChars = cur.substring(lastSentText.length);
+      sendDC({ type: "text_input", text: newChars });
+    } else if (cur.length < lastSentText.length) {
+      sendDC({ type: "key_event", key: "backspace" });
+    }
+    lastSentText = cur;
+  });
+};
+
+function setStatus(msg) { document.getElementById("status").textContent = msg; }
+
+// ── Kết nối ───────────────────────────────────────────────────────────────
+function connectToLast() {
+  const last = localStorage.getItem("last_room_code");
+  if (last) connectTo(last);
+}
+
+function connectToCode() {
+  const code = document.getElementById("input-code").value.trim();
+  if (code.length !== 6) { setStatus("Mã phải đúng 6 số"); return; }
+  connectTo(code);
+}
+
+async function connectTo(code) {
+  roomCode = code;
+  localStorage.setItem("last_room_code", code);
+  setStatus("Đang kết nối...");
+
+  pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+
+  // Nhận video + audio
+  pc.ontrack = e => {
+    const vid = document.getElementById("remote-video");
+    if (!vid.srcObject) vid.srcObject = new MediaStream();
+    vid.srcObject.addTrack(e.track);
+    if (e.track.kind === "video") showRemoteScreen();
+  };
+
+  // Nhận ICE từ host
+  pc.onicecandidate = e => {
+    if (e.candidate) {
+      db.ref(`rooms/${code}/ice_client`).push({
+        sdpMid: e.candidate.sdpMid,
+        sdpMLineIndex: e.candidate.sdpMLineIndex,
+        candidate: e.candidate.candidate
+      });
+    }
+  };
+
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === "connected") {
+      document.getElementById("connecting-overlay").style.display = "none";
+      sendDC({ type: "request_screen_size" });
+    }
+    if (["disconnected","failed","closed"].includes(pc.connectionState)) {
+      disconnect();
+    }
+  };
+
+  // Nhận DataChannel từ host (Máy B tạo)
+  pc.ondatachannel = e => {
+    dataChannel = e.channel;
+    dataChannel.onmessage = ev => {
+      try {
+        const msg = JSON.parse(ev.data);
+        // Nhận screen_size từ Máy B (không cần xử lý ở web vì CSS tự scale)
+      } catch(_) {}
+    };
+  };
+
+  // Lắng nghe offer từ Máy B
+  db.ref(`rooms/${code}/offer`).on("value", async snap => {
+    const sdp = snap.val();
+    if (!sdp || pc.remoteDescription) return;
+    await pc.setRemoteDescription({ type: "offer", sdp });
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    db.ref(`rooms/${code}/answer`).set(answer.sdp);
+    db.ref(`rooms/${code}/status`).set("connected");
+  });
+
+  // Lắng nghe ICE từ host
+  db.ref(`rooms/${code}/ice_host`).on("child_added", snap => {
+    const c = snap.val();
+    if (c && pc) pc.addIceCandidate(new RTCIceCandidate(c)).catch(()=>{});
+  });
+
+  // Lắng nghe status ended
+  db.ref(`rooms/${code}/status`).on("value", snap => {
+    if (snap.val() === "ended") disconnect();
+  });
+
+  // Hiện màn hình remote
+  document.getElementById("screen-connect").style.display = "none";
+  document.getElementById("screen-remote").style.display = "block";
+  requestFullscreen();
+  setupTouchHandler();
+}
+
+// ── Hiện màn hình remote ─────────────────────────────────────────────────
+function showRemoteScreen() {
+  document.getElementById("connecting-overlay").style.display = "none";
+}
+
+// ── Touch handler ─────────────────────────────────────────────────────────
+function setupTouchHandler() {
+  const vid = document.getElementById("remote-video");
+
+  vid.addEventListener("touchstart", e => {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    // Chạm góc trên phải → hiện nút điều khiển
+    if (t.clientX > window.innerWidth * 0.8 && t.clientY < window.innerHeight * 0.15) {
+      showControls(); return;
+    }
+    const {nx, ny} = norm(t.clientX, t.clientY);
+    sendDC({ type: "touch_down", x: nx, y: ny, ptr: t.identifier });
+  }, { passive: false });
+
+  vid.addEventListener("touchmove", e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      const {nx, ny} = norm(t.clientX, t.clientY);
+      sendDC({ type: "touch_move", x: nx, y: ny, ptr: t.identifier });
+    }
+  }, { passive: false });
+
+  vid.addEventListener("touchend", e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      const {nx, ny} = norm(t.clientX, t.clientY);
+      sendDC({ type: "touch_up", x: nx, y: ny, ptr: t.identifier });
+    }
+  }, { passive: false });
+}
+
+function norm(cx, cy) {
+  const vid = document.getElementById("remote-video");
+  const r = vid.getBoundingClientRect();
+  // Tính vùng video thật (letterbox)
+  const vidRatio = vid.videoWidth / vid.videoHeight;
+  const boxRatio = r.width / r.height;
+  let drawW, drawH, ox, oy;
+  if (vidRatio > boxRatio) {
+    drawW = r.width; drawH = r.width / vidRatio;
+    ox = 0; oy = (r.height - drawH) / 2;
+  } else {
+    drawH = r.height; drawW = r.height * vidRatio;
+    oy = 0; ox = (r.width - drawW) / 2;
+  }
+  const nx = Math.max(0, Math.min(1, (cx - r.left - ox) / drawW));
+  const ny = Math.max(0, Math.min(1, (cy - r.top  - oy) / drawH));
+  return { nx, ny };
+}
+
+// ── Controls hiện/ẩn ─────────────────────────────────────────────────────
+function showControls() {
+  document.getElementById("top-bar").classList.add("show");
+  document.getElementById("btn-keyboard").classList.add("show");
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(() => {
+    document.getElementById("top-bar").classList.remove("show");
+    document.getElementById("btn-keyboard").classList.remove("show");
+  }, 3000);
+}
+
+// ── Keyboard ──────────────────────────────────────────────────────────────
+function toggleKeyboard() {
+  const kb = document.getElementById("keyboard-bar");
+  const show = !kb.classList.contains("show");
+  kb.classList.toggle("show", show);
+  if (show) { lastSentText = ""; document.getElementById("input-text").value = ""; }
+}
+
+function sendKey(key) {
+  if (key === "enter") {
+    sendDC({ type: "key_event", key: "enter" });
+    lastSentText = ""; document.getElementById("input-text").value = "";
+  } else {
+    sendDC({ type: "key_event", key });
+  }
+}
+
+// ── DataChannel send ──────────────────────────────────────────────────────
+function sendDC(obj) {
+  if (dataChannel && dataChannel.readyState === "open") {
+    dataChannel.send(JSON.stringify(obj));
+  }
+}
+
+// ── Disconnect ────────────────────────────────────────────────────────────
+function disconnect() {
+  if (roomCode) {
+    db.ref(`rooms/${roomCode}`).off();
+    db.ref(`rooms/${roomCode}/status`).set("ended");
+  }
+  if (pc) { pc.close(); pc = null; }
+  dataChannel = null; roomCode = null;
+  const vid = document.getElementById("remote-video");
+  if (vid.srcObject) { vid.srcObject.getTracks().forEach(t => t.stop()); vid.srcObject = null; }
+  document.getElementById("screen-remote").style.display = "none";
+  document.getElementById("screen-connect").style.display = "flex";
+  document.getElementById("keyboard-bar").classList.remove("show");
+  document.exitFullscreen?.().catch(()=>{});
+}
+
+// ── Fullscreen ────────────────────────────────────────────────────────────
+function requestFullscreen() {
+  const el = document.documentElement;
+  (el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen
+    || el.msRequestFullscreen || (()=>{})).call(el);
+}
+</script>
+</body>
+</html>
