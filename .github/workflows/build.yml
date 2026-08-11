@@ -30,11 +30,45 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2g"
 
-      - name: Upload APK artifact
+      - name: Ký APK bằng V1+V2 (tương thích MIUI cũ)
+        run: |
+          # Tạo keystore
+          keytool -genkey -v \
+            -keystore /tmp/release.jks \
+            -alias releasekey \
+            -keyalg RSA -keysize 2048 \
+            -validity 36500 \
+            -storepass android123 \
+            -keypass android123 \
+            -dname "CN=RemoteAssist, OU=Dev, O=Dev, L=HCM, S=HCM, C=VN"
+
+          BUILD_TOOLS=$(ls ${ANDROID_HOME}/build-tools | sort -V | tail -1)
+
+          # Align
+          ${ANDROID_HOME}/build-tools/${BUILD_TOOLS}/zipalign \
+            -v -p 4 \
+            app/build/outputs/apk/debug/app-debug.apk \
+            /tmp/aligned.apk
+
+          # Ký V1+V2 (--v1-signing-enabled true bắt buộc cho MIUI cũ)
+          ${ANDROID_HOME}/build-tools/${BUILD_TOOLS}/apksigner sign \
+            --ks /tmp/release.jks \
+            --ks-key-alias releasekey \
+            --ks-pass pass:android123 \
+            --key-pass pass:android123 \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled false \
+            --out /tmp/RemoteAssist.apk \
+            /tmp/aligned.apk
+
+          cp /tmp/RemoteAssist.apk app/build/outputs/apk/debug/RemoteAssist.apk
+          echo "APK signed OK"
+          ls -lh app/build/outputs/apk/debug/RemoteAssist.apk
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: RemoteAssist-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: RemoteAssist
+          path: app/build/outputs/apk/debug/RemoteAssist.apk
           retention-days: 30
-
-
