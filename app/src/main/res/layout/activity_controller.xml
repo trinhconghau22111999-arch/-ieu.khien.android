@@ -1,23 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
+<FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#111111">
 
-    <!-- ── Panel nhập mã ── -->
+    <!-- Panel nhập mã -->
     <LinearLayout
         android:id="@+id/layout_code_entry"
-        android:layout_width="0dp"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_gravity="center"
         android:orientation="vertical"
         android:padding="32dp"
-        android:gravity="center"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        android:gravity="center">
 
         <TextView
             android:layout_width="wrap_content"
@@ -36,92 +32,72 @@
             android:textColor="#AAAAAA"
             android:layout_marginBottom="32dp" />
 
-        <!--
-            NÚT MỚI: Kết nối lại server cũ.
-            Ẩn mặc định, hiện khi prefs có "last_room_code".
-        -->
-        <androidx.cardview.widget.CardView
+        <!-- Card kết nối lại server cũ -->
+        <LinearLayout
             android:id="@+id/btn_last_server"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="24dp"
-            android:visibility="gone"
-            app:cardBackgroundColor="#1E3A5F"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="4dp">
+            android:orientation="vertical"
+            android:padding="20dp"
+            android:gravity="center"
+            android:background="#1E3A5F"
+            android:visibility="gone">
 
-            <LinearLayout
-                android:layout_width="match_parent"
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="20dp"
-                android:gravity="center">
+                android:text="Kết nối lại"
+                android:textColor="#7EB8F7"
+                android:textSize="12sp"
+                android:layout_marginBottom="6dp" />
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Kết nối lại"
-                    android:textColor="#7EB8F7"
-                    android:textSize="12sp"
-                    android:layout_marginBottom="6dp" />
+            <TextView
+                android:id="@+id/text_last_code"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#FFFFFF"
+                android:textSize="36sp"
+                android:textStyle="bold"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.2"
+                android:text="------" />
 
-                <TextView
-                    android:id="@+id/text_last_code"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textColor="#FFFFFF"
-                    android:textSize="36sp"
-                    android:textStyle="bold"
-                    android:fontFamily="monospace"
-                    android:letterSpacing="0.2" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Bấm để kết nối ngay"
-                    android:textColor="#7EB8F7"
-                    android:textSize="11sp"
-                    android:layout_marginTop="6dp" />
-
-            </LinearLayout>
-        </androidx.cardview.widget.CardView>
-
-        <!-- Divider "hoặc nhập mã mới" -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="16dp">
-            <View android:layout_width="0dp" android:layout_height="1dp"
-                android:layout_weight="1" android:background="#444444" />
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="  hoặc nhập mã mới  "
-                android:textColor="#888888" android:textSize="12sp" />
-            <View android:layout_width="0dp" android:layout_height="1dp"
-                android:layout_weight="1" android:background="#444444" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Bấm để kết nối ngay"
+                android:textColor="#7EB8F7"
+                android:textSize="11sp"
+                android:layout_marginTop="6dp" />
         </LinearLayout>
 
-        <!-- Nhập mã tay -->
-        <com.google.android.material.textfield.TextInputLayout
+        <!-- Divider -->
+        <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-            app:boxStrokeColor="#555555"
-            android:hint="Mã 6 số">
+            android:text="─── hoặc nhập mã mới ───"
+            android:textColor="#666666"
+            android:textSize="12sp"
+            android:gravity="center"
+            android:layout_marginBottom="16dp" />
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/edit_pairing_code"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="number"
-                android:maxLength="6"
-                android:textColor="#FFFFFF"
-                android:textSize="24sp"
-                android:fontFamily="monospace"
-                android:gravity="center"
-                android:letterSpacing="0.3" />
-        </com.google.android.material.textfield.TextInputLayout>
+        <!-- Nhập mã -->
+        <EditText
+            android:id="@+id/edit_pairing_code"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:maxLength="6"
+            android:textColor="#FFFFFF"
+            android:textColorHint="#888888"
+            android:hint="Nhập mã 6 số"
+            android:textSize="24sp"
+            android:fontFamily="monospace"
+            android:gravity="center"
+            android:letterSpacing="0.3"
+            android:background="#333333"
+            android:padding="12dp" />
 
         <Button
             android:id="@+id/btn_connect"
@@ -133,36 +109,27 @@
 
     </LinearLayout>
 
-    <!-- ── View màn hình remote (hiện sau khi kết nối) ── -->
+    <!-- View màn hình remote -->
     <FrameLayout
         android:id="@+id/remote_view_container"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
         android:visibility="gone"
-        android:background="#000000"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        android:background="#000000">
 
-        <!-- WebRTC video renderer -->
         <org.webrtc.SurfaceViewRenderer
             android:id="@+id/surface_view"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
-        <!-- Nút ngắt kết nối (góc trên phải) -->
         <Button
             android:id="@+id/btn_disconnect"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="top|end"
             android:layout_margin="12dp"
-            android:text="Ngắt"
-            android:alpha="0.80"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+            android:text="Ngắt" />
 
-        <!-- Nút bàn phím ảo (góc dưới phải) -->
         <Button
             android:id="@+id/btn_toggle_keyboard"
             android:layout_width="48dp"
@@ -171,11 +138,8 @@
             android:layout_margin="12dp"
             android:text="⌨"
             android:textSize="20sp"
-            android:padding="0dp"
-            android:alpha="0.80"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+            android:padding="0dp" />
 
-        <!-- Keyboard bar (ẩn mặc định) -->
         <LinearLayout
             android:id="@+id/layout_keyboard_bar"
             android:layout_width="match_parent"
@@ -201,7 +165,6 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
                 android:orientation="horizontal">
 
                 <Button android:id="@+id/btn_key_tab"
@@ -221,4 +184,4 @@
 
     </FrameLayout>
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+</FrameLayout>

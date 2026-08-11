@@ -36,7 +36,7 @@ class ControllerActivity : AppCompatActivity() {
     private lateinit var layoutCodeEntry: LinearLayout
     private lateinit var editPairingCode: EditText
     private lateinit var btnConnect: Button
-    private lateinit var btnLastServer: Button       // NÚT MỚI: kết nối lại mã cũ
+    private lateinit var btnLastServer: android.view.View       // NÚT MỚI: kết nối lại mã cũ
     private lateinit var textLastCode: TextView      // Hiện mã cũ trong nút
     private lateinit var remoteViewContainer: View
     private lateinit var surfaceView: SurfaceViewRenderer

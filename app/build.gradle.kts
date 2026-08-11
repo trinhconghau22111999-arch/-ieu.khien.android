@@ -42,7 +42,6 @@ dependencies {
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
     // CardView — dùng trong activity_controller.xml (nút kết nối lại server cũ)
-    implementation("androidx.cardview:cardview:1.0.0")
 
     // Firebase — Signaling Server cho WebRTC (chỉ dùng khi kết nối đầu tiên)
     implementation(platform("com.google.firebase:firebase-bom:33.1.2"))

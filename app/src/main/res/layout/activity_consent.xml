@@ -1,33 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.core.widget.NestedScrollView
+<ScrollView
     xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="#FFFFFF">
 
-    <androidx.constraintlayout.widget.ConstraintLayout
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:orientation="vertical"
         android:padding="24dp">
 
-        <!-- Banner cảnh báo Accessibility chưa bật -->
+        <!-- Banner cảnh báo Accessibility -->
         <LinearLayout
             android:id="@+id/banner_accessibility"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:padding="16dp"
             android:background="#FFF3CD"
-            android:visibility="gone"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent">
+            android:visibility="gone">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="⚠️  Cần bật Dịch vụ Hỗ trợ"
+                android:text="Cần bật Dịch vụ Hỗ trợ trước"
                 android:textStyle="bold"
                 android:textSize="15sp" />
 
@@ -43,25 +40,21 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="Mở Cài đặt Hỗ trợ"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+                android:text="Mở Cài đặt Hỗ trợ" />
         </LinearLayout>
 
-        <!-- ── Phần đồng ý (lần đầu) ── -->
+        <!-- Phần đồng ý (lần đầu) -->
         <LinearLayout
             android:id="@+id/layout_consent_section"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:layout_marginTop="16dp"
-            app:layout_constraintTop_toBottomOf="@id/banner_accessibility"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent">
+            android:layout_marginTop="16dp">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/consent_title"
+                android:text="Cho phép điều khiển từ xa"
                 android:textSize="22sp"
                 android:textStyle="bold" />
 
@@ -69,7 +62,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="@string/consent_body"
+                android:text="Ứng dụng này sẽ:\n\n• Chia sẻ màn hình sang thiết bị bạn chọn\n• Truyền âm thanh hệ thống sang thiết bị đó\n• Cho phép thiết bị đó chạm điều khiển máy này\n\nMã 6 số được tạo một lần và lưu vĩnh viễn."
                 android:textSize="15sp" />
 
             <CheckBox
@@ -77,7 +70,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="20dp"
-                android:text="@string/consent_checkbox" />
+                android:text="Tôi đồng ý cho thiết bị khác điều khiển máy này" />
 
             <Button
                 android:id="@+id/btn_generate_code"
@@ -85,30 +78,26 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:enabled="false"
-                android:text="@string/btn_generate_code" />
+                android:text="Tạo mã &amp; Bắt đầu chia sẻ" />
         </LinearLayout>
 
-        <!-- ── Hiển thị mã (sau khi tạo) ── -->
+        <!-- Hiển thị mã (sau khi tạo) -->
         <LinearLayout
             android:id="@+id/layout_pairing_code"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:layout_marginTop="32dp"
             android:gravity="center"
-            android:visibility="gone"
-            app:layout_constraintTop_toBottomOf="@id/layout_consent_section"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent">
+            android:visibility="gone">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Mã ghép nối của máy này"
+                android:text="Mã ghép nối"
                 android:textSize="14sp"
                 android:textColor="#666666" />
 
-            <!-- Mã 6 số lớn, dễ đọc -->
             <TextView
                 android:id="@+id/text_pairing_code"
                 android:layout_width="wrap_content"
@@ -118,28 +107,25 @@
                 android:textSize="52sp"
                 android:textStyle="bold"
                 android:fontFamily="monospace"
-                tools:text="852314" />
+                android:text="------" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="Mã này cố định — chia sẻ cho máy cần điều khiển"
+                android:text="Chia sẻ mã này cho máy cần điều khiển"
                 android:textSize="12sp"
                 android:textColor="#888888"
                 android:gravity="center" />
 
-            <!-- Nút Tạo mã mới -->
             <Button
                 android:id="@+id/btn_new_code"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="20dp"
-                android:text="🔄  Tạo mã mới"
-                android:visibility="gone"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+                android:text="Tạo mã mới"
+                android:visibility="gone" />
 
-            <!-- Nút Kết thúc phiên -->
             <Button
                 android:id="@+id/btn_end_session"
                 android:layout_width="wrap_content"
@@ -150,5 +136,5 @@
 
         </LinearLayout>
 
-    </androidx.constraintlayout.widget.ConstraintLayout>
-</androidx.core.widget.NestedScrollView>
+    </LinearLayout>
+</ScrollView>
