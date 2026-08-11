@@ -2,111 +2,60 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#111111">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Remote Assist</title>
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Remote Assist">
+<!-- Cho phép mọi trình duyệt nhúng -->
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<title>Remote Assist — Điều khiển từ xa</title>
 <link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  body { background:#111; color:#fff; font-family:sans-serif; height:100dvh; overflow:hidden; display:flex; flex-direction:column; }
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+body{background:#111;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:100vh;height:100dvh;overflow:hidden;display:-webkit-flex;display:flex;-webkit-flex-direction:column;flex-direction:column}
 
-  /* ── Màn hình nhập mã ── */
-  #screen-connect {
-    flex:1; display:flex; flex-direction:column;
-    align-items:center; justify-content:center; padding:32px; gap:16px;
-  }
-  #screen-connect h1 { font-size:28px; font-weight:700; }
-  #screen-connect p  { color:#aaa; font-size:14px; margin-top:-8px; }
+/* ── Connect screen ── */
+#screen-connect{-webkit-flex:1;flex:1;display:-webkit-flex;display:flex;-webkit-flex-direction:column;flex-direction:column;-webkit-align-items:center;align-items:center;-webkit-justify-content:center;justify-content:center;padding:32px;gap:16px}
+#screen-connect h1{font-size:28px;font-weight:700}
+#screen-connect p{color:#aaa;font-size:14px;margin-top:-8px}
+#card-last{width:100%;background:#1E3A5F;border-radius:12px;padding:20px;text-align:center;cursor:pointer;display:none;-webkit-flex-direction:column;flex-direction:column;gap:6px}
+#card-last .label{color:#7EB8F7;font-size:12px}
+#card-last .code{color:#fff;font-size:36px;font-weight:700;font-family:monospace;letter-spacing:4px}
+#card-last .hint{color:#7EB8F7;font-size:11px}
+.divider{color:#555;font-size:12px;width:100%;text-align:center}
+#input-code{width:100%;padding:14px;background:#222;border:1px solid #444;border-radius:8px;color:#fff;font-size:28px;font-family:monospace;text-align:center;letter-spacing:6px;outline:none;-webkit-appearance:none}
+#btn-connect{width:100%;padding:14px;background:#1565C0;border:none;border-radius:8px;color:#fff;font-size:16px;font-weight:600;cursor:pointer;-webkit-appearance:none}
+#btn-connect:active{background:#0D47A1}
+#status{color:#aaa;font-size:13px;min-height:20px;text-align:center}
 
-  #card-last {
-    width:100%; background:#1E3A5F; border-radius:12px;
-    padding:20px; text-align:center; cursor:pointer;
-    display:none; gap:6px; flex-direction:column;
-  }
-  #card-last .label { color:#7EB8F7; font-size:12px; }
-  #card-last .code  { color:#fff; font-size:36px; font-weight:700; font-family:monospace; letter-spacing:4px; }
-  #card-last .hint  { color:#7EB8F7; font-size:11px; }
+/* ── Remote screen ── */
+#screen-remote{-webkit-flex:1;flex:1;position:relative;display:none;background:#000}
+#remote-video{width:100%;height:100%;object-fit:contain;display:block}
+#connecting-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:#000;display:-webkit-flex;display:flex;-webkit-align-items:center;align-items:center;-webkit-justify-content:center;justify-content:center;font-size:18px;color:#aaa}
+#top-bar{position:absolute;top:0;right:0;padding:12px;opacity:0;-webkit-transition:opacity 0.3s;transition:opacity 0.3s;pointer-events:none}
+#top-bar.show{opacity:1;pointer-events:all}
+#btn-disconnect{background:rgba(0,0,0,0.7);border:1px solid #666;color:#fff;padding:8px 18px;border-radius:8px;font-size:14px;cursor:pointer}
+#btn-keyboard{position:absolute;bottom:16px;right:16px;background:rgba(0,0,0,0.7);border:1px solid #666;color:#fff;width:48px;height:48px;border-radius:50%;font-size:22px;cursor:pointer;display:-webkit-flex;display:flex;-webkit-align-items:center;align-items:center;-webkit-justify-content:center;justify-content:center;opacity:0;-webkit-transition:opacity 0.3s;transition:opacity 0.3s;pointer-events:none}
+#btn-keyboard.show{opacity:1;pointer-events:all}
+#keyboard-bar{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.88);padding:10px;display:none;-webkit-flex-direction:column;flex-direction:column;gap:8px}
+#keyboard-bar.show{display:-webkit-flex;display:flex}
+#input-text{background:transparent;border:none;border-bottom:1px solid #555;color:#fff;font-size:16px;padding:6px 4px;outline:none;width:100%;-webkit-appearance:none}
+.key-row{display:-webkit-flex;display:flex;gap:6px}
+.key-btn{-webkit-flex:1;flex:1;padding:10px 0;background:#333;border:none;color:#fff;border-radius:6px;font-size:14px;cursor:pointer;-webkit-appearance:none}
+.key-btn:active{background:#555}
 
-  .divider { color:#555; font-size:12px; width:100%; text-align:center; }
-
-  #input-code {
-    width:100%; padding:14px; background:#222; border:1px solid #444;
-    border-radius:8px; color:#fff; font-size:28px; font-family:monospace;
-    text-align:center; letter-spacing:6px; outline:none;
-  }
-  #btn-connect {
-    width:100%; padding:14px; background:#1565C0; border:none;
-    border-radius:8px; color:#fff; font-size:16px; font-weight:600; cursor:pointer;
-  }
-  #btn-connect:active { background:#0D47A1; }
-  #status { color:#aaa; font-size:13px; min-height:20px; }
-
-  /* ── Màn hình xem video ── */
-  #screen-remote {
-    flex:1; position:relative; display:none; background:#000;
-  }
-  #remote-video {
-    width:100%; height:100%; object-fit:contain;
-  }
-
-  /* Overlay controls — ẩn mặc định, chạm góc trên phải để hiện */
-  #overlay {
-    position:absolute; inset:0; pointer-events:none;
-    display:flex; flex-direction:column;
-  }
-  #top-bar {
-    display:flex; justify-content:flex-end; padding:12px;
-    opacity:0; transition:opacity 0.3s; pointer-events:none;
-  }
-  #top-bar.show { opacity:1; pointer-events:all; }
-  #btn-disconnect {
-    background:rgba(0,0,0,0.6); border:1px solid #555;
-    color:#fff; padding:8px 16px; border-radius:8px;
-    font-size:14px; cursor:pointer;
-  }
-
-  /* Bàn phím overlay */
-  #keyboard-bar {
-    position:absolute; bottom:0; left:0; right:0;
-    background:rgba(0,0,0,0.85); padding:8px;
-    display:none; flex-direction:column; gap:6px;
-  }
-  #keyboard-bar.show { display:flex; }
-  #input-text {
-    background:transparent; border:none; border-bottom:1px solid #555;
-    color:#fff; font-size:16px; padding:6px; outline:none; width:100%;
-  }
-  .key-row { display:flex; gap:6px; }
-  .key-btn {
-    flex:1; padding:10px 0; background:#333; border:none;
-    color:#fff; border-radius:6px; font-size:14px; cursor:pointer;
-  }
-  .key-btn:active { background:#555; }
-
-  #btn-keyboard {
-    position:absolute; bottom:16px; right:16px;
-    background:rgba(0,0,0,0.6); border:1px solid #555;
-    color:#fff; width:48px; height:48px; border-radius:50%;
-    font-size:20px; cursor:pointer; display:flex;
-    align-items:center; justify-content:center;
-    opacity:0; transition:opacity 0.3s; pointer-events:none;
-  }
-  #btn-keyboard.show { opacity:1; pointer-events:all; }
-
-  #connecting-overlay {
-    position:absolute; inset:0; background:#000;
-    display:flex; align-items:center; justify-content:center;
-    font-size:18px; color:#aaa;
-  }
+/* Nút cài PWA */
+#btn-install{display:none;width:100%;padding:12px;background:#2E7D32;border:none;border-radius:8px;color:#fff;font-size:14px;cursor:pointer;margin-top:-8px}
 </style>
 </head>
 <body>
 
-<!-- Màn hình nhập mã -->
 <div id="screen-connect">
   <h1>Remote Assist</h1>
-  <p>Máy điều khiển (Web)</p>
+  <p>Điều khiển điện thoại từ trình duyệt</p>
 
   <div id="card-last" onclick="connectToLast()">
     <div class="label">Kết nối lại</div>
@@ -116,93 +65,94 @@
 
   <div class="divider">─── hoặc nhập mã mới ───</div>
 
-  <input id="input-code" type="number" maxlength="6"
-    placeholder="Mã 6 số" inputmode="numeric" />
+  <input id="input-code" type="tel" maxlength="6"
+    placeholder="Mã 6 số" inputmode="numeric" pattern="[0-9]*"/>
 
   <button id="btn-connect" onclick="connectToCode()">Kết nối</button>
+  <button id="btn-install" onclick="installPWA()">📲 Thêm vào màn hình chính</button>
   <div id="status"></div>
 </div>
 
-<!-- Màn hình xem video -->
 <div id="screen-remote">
-  <video id="remote-video" autoplay playsinline></video>
-
+  <video id="remote-video" autoplay playsinline webkit-playsinline></video>
   <div id="connecting-overlay">Đang kết nối...</div>
-
-  <div id="overlay">
-    <div id="top-bar">
-      <button id="btn-disconnect" onclick="disconnect()">Ngắt kết nối</button>
-    </div>
+  <div id="top-bar">
+    <button id="btn-disconnect" onclick="disconnect()">Ngắt kết nối</button>
   </div>
-
   <button id="btn-keyboard" onclick="toggleKeyboard()">⌨</button>
-
   <div id="keyboard-bar">
-    <input id="input-text" type="text" placeholder="Gõ để gửi sang điện thoại" />
+    <input id="input-text" type="text" placeholder="Gõ để gửi sang điện thoại" autocomplete="off"/>
     <div class="key-row">
       <button class="key-btn" onclick="sendKey('tab')">Tab</button>
       <button class="key-btn" onclick="sendKey('backspace')">⌫</button>
       <button class="key-btn" onclick="sendKey('escape')">Esc</button>
-      <button class="key-btn" onclick="sendKey('enter')" id="btn-enter">↵</button>
+      <button class="key-btn" onclick="sendKey('enter')">↵</button>
     </div>
   </div>
 </div>
 
-<!-- Firebase SDK -->
+<!-- Firebase compat SDK — chạy được trên mọi trình duyệt kể cả cũ -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
 <script>
-// ── Firebase config (lấy từ google-services.json) ──────────────────────────
-const firebaseConfig = {
+// ── Firebase ──────────────────────────────────────────────────────────────
+firebase.initializeApp({
   apiKey: "AIzaSyDEYQ_iyT9dEDcE8jXD2QE0nb9G439yv50",
-  authDomain: "checkinonline-785d5.firebaseapp.com",
   databaseURL: "https://checkinonline-785d5-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "checkinonline-785d5",
-  storageBucket: "checkinonline-785d5.firebasestorage.app"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+  projectId: "checkinonline-785d5"
+});
+var db = firebase.database();
 
-// ── State ──────────────────────────────────────────────────────────────────
-let pc = null;
-let roomCode = null;
-let dataChannel = null;
-let hideTimer = null;
-let lastSentText = "";
+// ── State ─────────────────────────────────────────────────────────────────
+var pc = null, roomCode = null, dataChannel = null;
+var hideTimer = null, lastSentText = "";
+var deferredPrompt = null; // PWA install prompt
 
-const ICE_SERVERS = [
-  { urls: "stun:stun.l.google.com:19302" },
-  { urls: "stun:stun1.l.google.com:19302" },
-  {
-    urls: "turn:openrelay.metered.ca:80",
-    username: "openrelayproject", credential: "openrelayproject"
-  },
-  {
-    urls: "turn:openrelay.metered.ca:443",
-    username: "openrelayproject", credential: "openrelayproject"
-  }
+var ICE = [
+  {urls:"stun:stun.l.google.com:19302"},
+  {urls:"stun:stun1.l.google.com:19302"},
+  {urls:"turn:openrelay.metered.ca:80",username:"openrelayproject",credential:"openrelayproject"},
+  {urls:"turn:openrelay.metered.ca:443",username:"openrelayproject",credential:"openrelayproject"},
+  {urls:"turn:openrelay.metered.ca:443?transport=tcp",username:"openrelayproject",credential:"openrelayproject"}
 ];
 
-// ── Khởi động ──────────────────────────────────────────────────────────────
-window.onload = () => {
-  const last = localStorage.getItem("last_room_code");
+// ── PWA install prompt ────────────────────────────────────────────────────
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('btn-install').style.display = 'block';
+});
+function installPWA() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(function() { deferredPrompt = null; });
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+window.onload = function() {
+  var last = localStorage.getItem("last_room_code");
   if (last) {
     document.getElementById("card-last").style.display = "flex";
     document.getElementById("last-code-display").textContent = last;
   }
-  document.getElementById("input-code").addEventListener("input", e => {
-    if (e.target.value.length > 6)
-      e.target.value = e.target.value.slice(0, 6);
+
+  // Chỉ cho nhập số
+  var inp = document.getElementById("input-code");
+  inp.addEventListener("input", function() {
+    this.value = this.value.replace(/[^0-9]/g,'').slice(0,6);
   });
-  // Gửi text theo từng ký tự mới
-  document.getElementById("input-text").addEventListener("input", e => {
-    const cur = e.target.value;
+  inp.addEventListener("keydown", function(e) {
+    if (e.key === "Enter") connectToCode();
+  });
+
+  // Text watcher gửi từng ký tự
+  document.getElementById("input-text").addEventListener("input", function() {
+    var cur = this.value;
     if (cur.length > lastSentText.length) {
-      const newChars = cur.substring(lastSentText.length);
-      sendDC({ type: "text_input", text: newChars });
+      sendDC({type:"text_input", text: cur.substring(lastSentText.length)});
     } else if (cur.length < lastSentText.length) {
-      sendDC({ type: "key_event", key: "backspace" });
+      sendDC({type:"key_event", key:"backspace"});
     }
     lastSentText = cur;
   });
@@ -212,35 +162,54 @@ function setStatus(msg) { document.getElementById("status").textContent = msg; }
 
 // ── Kết nối ───────────────────────────────────────────────────────────────
 function connectToLast() {
-  const last = localStorage.getItem("last_room_code");
+  var last = localStorage.getItem("last_room_code");
   if (last) connectTo(last);
 }
-
 function connectToCode() {
-  const code = document.getElementById("input-code").value.trim();
+  var code = document.getElementById("input-code").value.trim();
   if (code.length !== 6) { setStatus("Mã phải đúng 6 số"); return; }
   connectTo(code);
 }
 
-async function connectTo(code) {
+function connectTo(code) {
   roomCode = code;
   localStorage.setItem("last_room_code", code);
   setStatus("Đang kết nối...");
 
-  pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  // Tương thích mọi trình duyệt: thử webkit prefix
+  var RTCPeer = window.RTCPeerConnection
+    || window.webkitRTCPeerConnection
+    || window.mozRTCPeerConnection;
+
+  if (!RTCPeer) {
+    setStatus("Trình duyệt không hỗ trợ WebRTC. Dùng Chrome hoặc Firefox.");
+    return;
+  }
+
+  pc = new RTCPeer({iceServers: ICE});
 
   // Nhận video + audio
-  pc.ontrack = e => {
-    const vid = document.getElementById("remote-video");
-    if (!vid.srcObject) vid.srcObject = new MediaStream();
-    vid.srcObject.addTrack(e.track);
-    if (e.track.kind === "video") showRemoteScreen();
+  pc.ontrack = function(e) {
+    var vid = document.getElementById("remote-video");
+    if (!vid.srcObject) {
+      vid.srcObject = e.streams[0] || new MediaStream();
+    }
+    if (e.streams && e.streams[0]) {
+      vid.srcObject = e.streams[0];
+    } else {
+      vid.srcObject.addTrack(e.track);
+    }
+    if (e.track.kind === "video") {
+      document.getElementById("connecting-overlay").style.display = "none";
+    }
+    // Tự play (cần cho Safari/MIUI browser)
+    vid.play().catch(function(){});
   };
 
-  // Nhận ICE từ host
-  pc.onicecandidate = e => {
+  // Gửi ICE lên Firebase
+  pc.onicecandidate = function(e) {
     if (e.candidate) {
-      db.ref(`rooms/${code}/ice_client`).push({
+      db.ref("rooms/"+code+"/ice_client").push({
         sdpMid: e.candidate.sdpMid,
         sdpMLineIndex: e.candidate.sdpMLineIndex,
         candidate: e.candidate.candidate
@@ -248,118 +217,147 @@ async function connectTo(code) {
     }
   };
 
-  pc.onconnectionstatechange = () => {
-    if (pc.connectionState === "connected") {
+  // Trạng thái kết nối
+  pc.onconnectionstatechange = function() {
+    var s = pc.connectionState;
+    if (s === "connected") {
       document.getElementById("connecting-overlay").style.display = "none";
-      sendDC({ type: "request_screen_size" });
+      sendDC({type:"request_screen_size"});
+      setStatus("");
     }
-    if (["disconnected","failed","closed"].includes(pc.connectionState)) {
+    if (s === "disconnected" || s === "failed" || s === "closed") {
       disconnect();
     }
   };
+  // Fallback cho trình duyệt cũ không có connectionState
+  pc.oniceconnectionstatechange = function() {
+    var s = pc.iceConnectionState;
+    if (s === "connected" || s === "completed") {
+      document.getElementById("connecting-overlay").style.display = "none";
+      sendDC({type:"request_screen_size"});
+    }
+    if (s === "failed" || s === "closed") disconnect();
+  };
 
-  // Nhận DataChannel từ host (Máy B tạo)
-  pc.ondatachannel = e => {
+  // Nhận DataChannel từ Máy B
+  pc.ondatachannel = function(e) {
     dataChannel = e.channel;
-    dataChannel.onmessage = ev => {
-      try {
-        const msg = JSON.parse(ev.data);
-        // Nhận screen_size từ Máy B (không cần xử lý ở web vì CSS tự scale)
-      } catch(_) {}
+    dataChannel.onmessage = function(ev) {
+      try { JSON.parse(ev.data); } catch(_) {}
     };
   };
 
   // Lắng nghe offer từ Máy B
-  db.ref(`rooms/${code}/offer`).on("value", async snap => {
-    const sdp = snap.val();
+  db.ref("rooms/"+code+"/offer").on("value", function(snap) {
+    var sdp = snap.val();
     if (!sdp || pc.remoteDescription) return;
-    await pc.setRemoteDescription({ type: "offer", sdp });
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    db.ref(`rooms/${code}/answer`).set(answer.sdp);
-    db.ref(`rooms/${code}/status`).set("connected");
+    var RTCSdp = window.RTCSessionDescription || window.webkitRTCSessionDescription;
+    pc.setRemoteDescription(new RTCSdp({type:"offer", sdp:sdp}))
+      .then(function() { return pc.createAnswer(); })
+      .then(function(answer) {
+        return pc.setLocalDescription(answer).then(function() { return answer; });
+      })
+      .then(function(answer) {
+        db.ref("rooms/"+code+"/answer").set(answer.sdp);
+        db.ref("rooms/"+code+"/status").set("connected");
+      })
+      .catch(function(e) { setStatus("Lỗi: "+e.message); });
   });
 
-  // Lắng nghe ICE từ host
-  db.ref(`rooms/${code}/ice_host`).on("child_added", snap => {
-    const c = snap.val();
-    if (c && pc) pc.addIceCandidate(new RTCIceCandidate(c)).catch(()=>{});
+  // Nhận ICE từ Máy B
+  db.ref("rooms/"+code+"/ice_host").on("child_added", function(snap) {
+    var c = snap.val();
+    if (!c || !pc) return;
+    var RTCIce = window.RTCIceCandidate || window.webkitRTCIceCandidate;
+    pc.addIceCandidate(new RTCIce(c)).catch(function(){});
   });
 
-  // Lắng nghe status ended
-  db.ref(`rooms/${code}/status`).on("value", snap => {
+  // Theo dõi status
+  db.ref("rooms/"+code+"/status").on("value", function(snap) {
     if (snap.val() === "ended") disconnect();
   });
 
   // Hiện màn hình remote
   document.getElementById("screen-connect").style.display = "none";
   document.getElementById("screen-remote").style.display = "block";
-  requestFullscreen();
-  setupTouchHandler();
+  tryFullscreen();
+  setupTouch();
 }
 
-// ── Hiện màn hình remote ─────────────────────────────────────────────────
-function showRemoteScreen() {
-  document.getElementById("connecting-overlay").style.display = "none";
-}
+// ── Touch ─────────────────────────────────────────────────────────────────
+function setupTouch() {
+  var vid = document.getElementById("remote-video");
 
-// ── Touch handler ─────────────────────────────────────────────────────────
-function setupTouchHandler() {
-  const vid = document.getElementById("remote-video");
-
-  vid.addEventListener("touchstart", e => {
+  function onStart(e) {
     e.preventDefault();
-    const t = e.changedTouches[0];
-    // Chạm góc trên phải → hiện nút điều khiển
-    if (t.clientX > window.innerWidth * 0.8 && t.clientY < window.innerHeight * 0.15) {
-      showControls(); return;
+    var touches = e.changedTouches || [];
+    for (var i=0; i<touches.length; i++) {
+      var t = touches[i];
+      if (t.clientX > window.innerWidth*0.8 && t.clientY < window.innerHeight*0.15) {
+        showControls(); continue;
+      }
+      var n = norm(t.clientX, t.clientY);
+      sendDC({type:"touch_down", x:n.x, y:n.y, ptr:t.identifier});
     }
-    const {nx, ny} = norm(t.clientX, t.clientY);
-    sendDC({ type: "touch_down", x: nx, y: ny, ptr: t.identifier });
-  }, { passive: false });
-
-  vid.addEventListener("touchmove", e => {
+  }
+  function onMove(e) {
     e.preventDefault();
-    for (const t of e.changedTouches) {
-      const {nx, ny} = norm(t.clientX, t.clientY);
-      sendDC({ type: "touch_move", x: nx, y: ny, ptr: t.identifier });
+    var touches = e.changedTouches || [];
+    for (var i=0; i<touches.length; i++) {
+      var t = touches[i];
+      var n = norm(t.clientX, t.clientY);
+      sendDC({type:"touch_move", x:n.x, y:n.y, ptr:t.identifier});
     }
-  }, { passive: false });
-
-  vid.addEventListener("touchend", e => {
+  }
+  function onEnd(e) {
     e.preventDefault();
-    for (const t of e.changedTouches) {
-      const {nx, ny} = norm(t.clientX, t.clientY);
-      sendDC({ type: "touch_up", x: nx, y: ny, ptr: t.identifier });
+    var touches = e.changedTouches || [];
+    for (var i=0; i<touches.length; i++) {
+      var t = touches[i];
+      var n = norm(t.clientX, t.clientY);
+      sendDC({type:"touch_up", x:n.x, y:n.y, ptr:t.identifier});
     }
-  }, { passive: false });
+  }
+
+  vid.addEventListener("touchstart", onStart, {passive:false});
+  vid.addEventListener("touchmove",  onMove,  {passive:false});
+  vid.addEventListener("touchend",   onEnd,   {passive:false});
+  // Mouse fallback cho desktop
+  vid.addEventListener("mousedown", function(e) {
+    var n = norm(e.clientX, e.clientY);
+    sendDC({type:"touch_down", x:n.x, y:n.y, ptr:0});
+  });
+  vid.addEventListener("mousemove", function(e) {
+    if (e.buttons !== 1) return;
+    var n = norm(e.clientX, e.clientY);
+    sendDC({type:"touch_move", x:n.x, y:n.y, ptr:0});
+  });
+  vid.addEventListener("mouseup", function(e) {
+    var n = norm(e.clientX, e.clientY);
+    sendDC({type:"touch_up", x:n.x, y:n.y, ptr:0});
+  });
 }
 
 function norm(cx, cy) {
-  const vid = document.getElementById("remote-video");
-  const r = vid.getBoundingClientRect();
-  // Tính vùng video thật (letterbox)
-  const vidRatio = vid.videoWidth / vid.videoHeight;
-  const boxRatio = r.width / r.height;
-  let drawW, drawH, ox, oy;
-  if (vidRatio > boxRatio) {
-    drawW = r.width; drawH = r.width / vidRatio;
-    ox = 0; oy = (r.height - drawH) / 2;
-  } else {
-    drawH = r.height; drawW = r.height * vidRatio;
-    oy = 0; ox = (r.width - drawW) / 2;
-  }
-  const nx = Math.max(0, Math.min(1, (cx - r.left - ox) / drawW));
-  const ny = Math.max(0, Math.min(1, (cy - r.top  - oy) / drawH));
-  return { nx, ny };
+  var vid = document.getElementById("remote-video");
+  var r = vid.getBoundingClientRect();
+  var vw = vid.videoWidth || 1, vh = vid.videoHeight || 1;
+  var bw = r.width, bh = r.height;
+  var scale = Math.min(bw/vw, bh/vh);
+  var dw = vw*scale, dh = vh*scale;
+  var ox = (bw-dw)/2, oy = (bh-dh)/2;
+  return {
+    x: Math.max(0, Math.min(1, (cx - r.left - ox) / dw)),
+    y: Math.max(0, Math.min(1, (cy - r.top  - oy) / dh))
+  };
 }
 
-// ── Controls hiện/ẩn ─────────────────────────────────────────────────────
+// ── Controls ──────────────────────────────────────────────────────────────
 function showControls() {
   document.getElementById("top-bar").classList.add("show");
   document.getElementById("btn-keyboard").classList.add("show");
   clearTimeout(hideTimer);
-  hideTimer = setTimeout(() => {
+  hideTimer = setTimeout(function() {
     document.getElementById("top-bar").classList.remove("show");
     document.getElementById("btn-keyboard").classList.remove("show");
   }, 3000);
@@ -367,49 +365,60 @@ function showControls() {
 
 // ── Keyboard ──────────────────────────────────────────────────────────────
 function toggleKeyboard() {
-  const kb = document.getElementById("keyboard-bar");
-  const show = !kb.classList.contains("show");
-  kb.classList.toggle("show", show);
-  if (show) { lastSentText = ""; document.getElementById("input-text").value = ""; }
-}
-
-function sendKey(key) {
-  if (key === "enter") {
-    sendDC({ type: "key_event", key: "enter" });
-    lastSentText = ""; document.getElementById("input-text").value = "";
+  var kb = document.getElementById("keyboard-bar");
+  var show = kb.style.display !== "flex" && !kb.classList.contains("show");
+  if (show) {
+    kb.classList.add("show"); lastSentText = "";
+    document.getElementById("input-text").value = "";
+    document.getElementById("input-text").focus();
   } else {
-    sendDC({ type: "key_event", key });
+    kb.classList.remove("show");
+  }
+}
+function sendKey(key) {
+  sendDC({type:"key_event", key:key});
+  if (key === "enter") {
+    lastSentText = ""; document.getElementById("input-text").value = "";
   }
 }
 
-// ── DataChannel send ──────────────────────────────────────────────────────
+// ── DataChannel ───────────────────────────────────────────────────────────
 function sendDC(obj) {
   if (dataChannel && dataChannel.readyState === "open") {
-    dataChannel.send(JSON.stringify(obj));
+    try { dataChannel.send(JSON.stringify(obj)); } catch(_) {}
   }
 }
 
 // ── Disconnect ────────────────────────────────────────────────────────────
 function disconnect() {
   if (roomCode) {
-    db.ref(`rooms/${roomCode}`).off();
-    db.ref(`rooms/${roomCode}/status`).set("ended");
+    db.ref("rooms/"+roomCode).off();
+    db.ref("rooms/"+roomCode+"/status").set("ended");
   }
-  if (pc) { pc.close(); pc = null; }
+  if (pc) { try { pc.close(); } catch(_){} pc = null; }
   dataChannel = null; roomCode = null;
-  const vid = document.getElementById("remote-video");
-  if (vid.srcObject) { vid.srcObject.getTracks().forEach(t => t.stop()); vid.srcObject = null; }
+  var vid = document.getElementById("remote-video");
+  if (vid.srcObject) {
+    try { vid.srcObject.getTracks().forEach(function(t){t.stop();}); } catch(_){}
+    vid.srcObject = null;
+  }
   document.getElementById("screen-remote").style.display = "none";
   document.getElementById("screen-connect").style.display = "flex";
   document.getElementById("keyboard-bar").classList.remove("show");
-  document.exitFullscreen?.().catch(()=>{});
+  try { document.exitFullscreen && document.exitFullscreen(); } catch(_){}
+  setStatus("Đã ngắt kết nối");
 }
 
-// ── Fullscreen ────────────────────────────────────────────────────────────
-function requestFullscreen() {
-  const el = document.documentElement;
-  (el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen
-    || el.msRequestFullscreen || (()=>{})).call(el);
+// ── Fullscreen (tương thích mọi trình duyệt) ─────────────────────────────
+function tryFullscreen() {
+  var el = document.documentElement;
+  var fn = el.requestFullscreen || el.webkitRequestFullscreen
+    || el.mozRequestFullScreen || el.msRequestFullscreen;
+  if (fn) fn.call(el).catch(function(){});
+  // Khóa landscape nếu có API
+  if (screen.orientation && screen.orientation.lock) {
+    screen.orientation.lock("landscape").catch(function(){});
+  }
 }
 </script>
 </body>
