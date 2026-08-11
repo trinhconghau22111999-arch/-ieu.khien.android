@@ -10,12 +10,10 @@ android {
 
     defaultConfig {
         applicationId = "Com.hau.name"
-        minSdk = 23
-        targetSdk = 28   // Hạ xuống 28 — MIUI cũ hay từ chối APK targetSdk > 30
+        minSdk = 21          // Android 5.0 trở lên — thấp nhất WebRTC hỗ trợ
+        targetSdk = 26       // Android 8 — thấp nhất vẫn pass Google policy
         versionCode = 2
         versionName = "2.0"
-
-        // Tắt multidex tự động — tránh lỗi parse trên máy cũ
         multiDexEnabled = false
     }
 
@@ -30,17 +28,15 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11  // Hạ từ 17 xuống 11 — tương thích máy cũ hơn
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_1_8   // Java 8 — thấp nhất, mọi Android đều chạy
+        targetCompatibility = JavaVersion.VERSION_1_8
     }
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "1.8"
     }
     buildFeatures {
         viewBinding = true
     }
-
-    // Tắt lint block build
     lint {
         abortOnError = false
     }
