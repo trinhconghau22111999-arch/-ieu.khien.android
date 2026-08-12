@@ -48,6 +48,18 @@ class ConsentActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Ẩn status bar trên Máy B
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            window.insetsController?.hide(
+                android.view.WindowInsets.Type.statusBars())
+        } else {
+            @Suppress("DEPRECATION")
+            window.setFlags(
+                android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN)
+        }
+
         setContentView(R.layout.activity_consent)
 
         prefs = getSharedPreferences("remote_assist", MODE_PRIVATE)
