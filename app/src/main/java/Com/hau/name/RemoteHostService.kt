@@ -357,7 +357,7 @@ class RemoteHostService : Service() {
         private const val NOTIF_ID = 42
         // 720p = điểm cân bằng tốt nhất: sắc nét đủ dùng + encode nhanh + ít lag
         // 1080p trở lên làm CPU điện thoại encode không kịp → lag hình
-        private const val CAPTURE_MAX_DIM = 1280  // 720p landscape (1280x720)
+        private const val CAPTURE_MAX_DIM = 660  // 720p landscape (1280x720)
         private const val CAPTURE_FPS = 30
         const val AUDIO_SAMPLE_RATE = 44100
 
