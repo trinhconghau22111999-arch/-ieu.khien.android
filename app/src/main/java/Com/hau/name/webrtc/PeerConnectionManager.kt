@@ -9,8 +9,8 @@ import java.nio.ByteBuffer
 
 private const val TAG = "PeerConnectionManager"
 
-private const val MAX_VIDEO_BITRATE_BPS = 2_000_000
-private const val MIN_VIDEO_BITRATE_BPS = 300_000
+private const val MAX_VIDEO_BITRATE_BPS = 8_000_000  // 8Mbps — sắc nét trên WiFi
+private const val MIN_VIDEO_BITRATE_BPS = 1_000_000  // 1Mbps minimum
 
 private val ICE_SERVERS = listOf(
     PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
@@ -159,10 +159,19 @@ class PeerConnectionManager(
         dataChannel?.registerObserver(buildDataChannelObserver())
 
         // Tạo offer
+        val offerConstraints = MediaConstraints().apply {
+            mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"))
+            mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"))
+        }
         pc.createOffer(buildCreateSdpObserver { sdp ->
-            pc.setLocalDescription(buildSetSdpObserver { }, sdp)
-            signalingClient.sendOffer(sdp.description)
-        }, MediaConstraints())
+            // Inject bitrate cao vào SDP
+            val highBitrateSdp = sdp.description.replace(
+                "a=mid:video", "a=mid:video
+b=AS:8000")
+            val modifiedSdp = SessionDescription(sdp.type, highBitrateSdp)
+            pc.setLocalDescription(buildSetSdpObserver { }, modifiedSdp)
+            signalingClient.sendOffer(modifiedSdp.description)
+        }, offerConstraints)
     }
 
     fun handleAnswer(sdpStr: String) {

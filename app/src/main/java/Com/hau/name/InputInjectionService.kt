@@ -8,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import org.json.JSONObject
 
 private const val TAG = "InputInjectionService"
@@ -18,15 +19,22 @@ class InputInjectionService : AccessibilityService() {
     private lateinit var prefs: SharedPreferences
     private val handler = Handler(Looper.getMainLooper())
 
-    // ── Fix gõ chữ: debounce — chỉ xử lý lệnh text sau 50ms không có lệnh mới
-    private var pendingText = StringBuilder()
-    private val textFlushRunnable = Runnable { flushPendingText() }
-    private val TEXT_DEBOUNCE_MS = 50L
+    // ── Fix gõ chữ: chỉ dùng SET_TEXT, không dùng clipboard paste ──────────
+    // Vấn đề cũ: paste → TextWatcher ở Máy A gửi lại → vòng lặp vô tận → 8 ký tự
+    // Fix: dùng ACTION_SET_TEXT trực tiếp, không qua clipboard
+    private var currentFieldText = StringBuilder()
 
-    // ── Fix vuốt: theo dõi pointer đang giữ
-    private data class PointerState(val startX: Float, val startY: Float,
-                                     var lastX: Float, var lastY: Float,
-                                     val startTime: Long)
+    // ── Fix vuốt: dùng 1 stroke liên tục thay vì nhiều stroke rời ───────────
+    // Vấn đề cũ: mỗi touch_move dispatch 1 GestureDescription mới → Android
+    // coi là gesture mới → ACTION_DOWN mới → không phải move
+    // Fix: tích lũy path từ down→move→up rồi dispatch 1 lần duy nhất khi UP
+    private data class PointerState(
+        val startX: Float, val startY: Float,
+        val path: Path,
+        val startTime: Long,
+        var lastX: Float, var lastY: Float,
+        var pathLength: Int = 1
+    )
     private val activePointers = mutableMapOf<Int, PointerState>()
 
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -39,7 +47,6 @@ class InputInjectionService : AccessibilityService() {
         prefs.registerOnSharedPreferenceChangeListener(prefsListener)
         roomCode = prefs.getString("active_room_code", null)
         ControlCommandBus.subscribe { json -> handleCommand(json) }
-        ControlCommandBus.subscribeReply { } // placeholder
         Log.d(TAG, "Service connected, roomCode=$roomCode")
     }
 
@@ -49,194 +56,175 @@ class InputInjectionService : AccessibilityService() {
 
         when (obj.optString("type")) {
 
-            // ── Tap (chạm nhấn) ───────────────────────────────────────────
-            "tap" -> {
-                val (px, py) = toPixels(obj) ?: return
-                performTap(px, py)
-            }
-
-            // ── Touch down ────────────────────────────────────────────────
+            // ── TAP: chạm nhấn nhanh ─────────────────────────────────────
             "touch_down" -> {
                 val (px, py) = toPixels(obj) ?: return
                 val ptr = obj.optInt("ptr", 0)
-                activePointers[ptr] = PointerState(px, py, px, py, System.currentTimeMillis())
-                // Dispatch stroke ngắn tại điểm down
-                val path = Path().apply { moveTo(px, py); lineTo(px + 0.1f, py) }
-                dispatchStroke(path, 0, 60, willContinue = true)
+                val path = Path().apply { moveTo(px, py) }
+                activePointers[ptr] = PointerState(px, py, path, System.currentTimeMillis(), px, py)
             }
 
-            // ── Touch move: vuốt mượt ─────────────────────────────────────
+            // ── MOVE: tích lũy vào path ───────────────────────────────────
+            // KHÔNG dispatch ở đây — chờ đến UP mới dispatch toàn bộ
             "touch_move" -> {
                 val (px, py) = toPixels(obj) ?: return
                 val ptr = obj.optInt("ptr", 0)
                 val state = activePointers[ptr] ?: run {
-                    // Không có down trước → tạo mới
-                    activePointers[ptr] = PointerState(px, py, px, py, System.currentTimeMillis())
+                    val path = Path().apply { moveTo(px, py) }
+                    activePointers[ptr] = PointerState(px, py, path, System.currentTimeMillis(), px, py)
                     return
                 }
-                val path = Path().apply {
-                    moveTo(state.lastX, state.lastY)
-                    lineTo(px, py)
-                }
-                state.lastX = px; state.lastY = py
-                // Dispatch liên tục với willContinue=true để giữ touch
-                dispatchStroke(path, 0, 20, willContinue = true)
+                state.path.lineTo(px, py)
+                state.lastX = px
+                state.lastY = py
+                state.pathLength++
             }
 
-            // ── Touch up ──────────────────────────────────────────────────
+            // ── UP: dispatch gesture hoàn chỉnh ──────────────────────────
             "touch_up" -> {
                 val (px, py) = toPixels(obj) ?: return
                 val ptr = obj.optInt("ptr", 0)
-                val state = activePointers.remove(ptr)
-                val path = Path().apply {
-                    moveTo(state?.lastX ?: px, state?.lastY ?: py)
-                    lineTo(px, py)
+                val state = activePointers.remove(ptr) ?: run {
+                    // Không có down trước → tap đơn
+                    performTap(px, py)
+                    return
                 }
-                // willContinue=false → ACTION_UP
-                dispatchStroke(path, 0, 60, willContinue = false)
+                state.path.lineTo(px, py)
+
+                val elapsed = System.currentTimeMillis() - state.startTime
+                val dx = px - state.startX
+                val dy = py - state.startY
+                val dist = Math.sqrt((dx * dx + dy * dy).toDouble()).toFloat()
+
+                if (dist < 20f && state.pathLength <= 3) {
+                    // Ít di chuyển → TAP
+                    performTap(state.startX, state.startY)
+                } else {
+                    // Có di chuyển → SWIPE (1 stroke liên tục từ down đến up)
+                    val duration = elapsed.coerceIn(100, 2000)
+                    val stroke = GestureDescription.StrokeDescription(
+                        state.path, 0, duration)
+                    val gesture = GestureDescription.Builder().addStroke(stroke).build()
+                    dispatchGesture(gesture, null, null)
+                }
             }
 
-            // ── Swipe cũ (tương thích ngược) ─────────────────────────────
-            "swipe" -> {
-                val (x1, y1) = toPixels(obj) ?: return
-                val (w, h) = ScreenMetrics.realSize(this)
-                val x2 = (obj.optDouble("x2").toFloat() * w).coerceIn(0f, w - 1f)
-                val y2 = (obj.optDouble("y2").toFloat() * h).coerceIn(0f, h - 1f)
-                val duration = obj.optLong("duration", 300L)
-                val path = Path().apply { moveTo(x1, y1); lineTo(x2, y2) }
-                dispatchStroke(path, 0, duration, willContinue = false)
-            }
-
-            // ── Kích thước màn hình ───────────────────────────────────────
-            "request_screen_size" -> {
-                val (w, h) = ScreenMetrics.realSize(this)
-                val reply = JSONObject().apply {
-                    put("type", "screen_size"); put("w", w); put("h", h)
-                }
-                ControlCommandBus.publishReply(reply.toString())
-            }
+            // ── Kích thước + orientation ──────────────────────────────────
+            "request_screen_size" -> sendScreenInfo()
 
             // ── Text input: FIX gõ nhiều ký tự ───────────────────────────
-            // Vấn đề cũ: mỗi lần gọi injectText() → paste vào field → field
-            // trigger TextWatcher → gửi lại → vòng lặp vô tận.
-            // Fix: dùng clipboard một lần, debounce, paste 1 lần duy nhất.
+            // Dùng ACTION_SET_TEXT thay vì clipboard paste
+            // → không trigger TextWatcher → không vòng lặp
             "text_input" -> {
-                val text = obj.optString("text", "")
-                if (text.isEmpty()) return
-                // Tích lũy ký tự trong 50ms rồi paste 1 lần
-                pendingText.append(text)
-                handler.removeCallbacks(textFlushRunnable)
-                handler.postDelayed(textFlushRunnable, TEXT_DEBOUNCE_MS)
+                val newChar = obj.optString("text", "")
+                if (newChar.isEmpty()) return
+                currentFieldText.append(newChar)
+                val node = getFocusedInput() ?: run {
+                    // Không có input focus → thử paste vào clipboard làm fallback
+                    currentFieldText.clear()
+                    currentFieldText.append(newChar)
+                    return
+                }
+                val args = android.os.Bundle().apply {
+                    putCharSequence(
+                        AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
+                        currentFieldText.toString()
+                    )
+                }
+                val ok = node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+                if (!ok) {
+                    // Fallback clipboard nếu SET_TEXT không được
+                    val clip = android.content.ClipData.newPlainText("t", newChar)
+                    (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                        .setPrimaryClip(clip)
+                    node.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+                }
             }
 
             // ── Key events ────────────────────────────────────────────────
             "key_event" -> {
                 when (obj.optString("key")) {
-                    "back"      -> performGlobalAction(GLOBAL_ACTION_BACK)
-                    "home"      -> performGlobalAction(GLOBAL_ACTION_HOME)
-                    "recents"   -> performGlobalAction(GLOBAL_ACTION_RECENTS)
-                    "backspace" -> deleteLastChar()
-                    "enter"     -> performActionOnFocus(
-                        android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)
-                    "tab"       -> performActionOnFocus(
-                        android.view.accessibility.AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
-                    "escape"    -> performGlobalAction(GLOBAL_ACTION_BACK)
+                    "backspace" -> {
+                        if (currentFieldText.isNotEmpty()) {
+                            currentFieldText.deleteCharAt(currentFieldText.length - 1)
+                        }
+                        val node = getFocusedInput()
+                        if (node != null && currentFieldText.isNotEmpty()) {
+                            val args = android.os.Bundle().apply {
+                                putCharSequence(
+                                    AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
+                                    currentFieldText.toString()
+                                )
+                            }
+                            node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+                        } else {
+                            // Field trống → SET_TEXT ""
+                            node?.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT,
+                                android.os.Bundle().apply {
+                                    putCharSequence(
+                                        AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "")
+                                })
+                        }
+                    }
+                    "enter"   -> {
+                        currentFieldText.clear()
+                        getFocusedInput()?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                            ?: performGlobalAction(GLOBAL_ACTION_BACK)
+                    }
+                    "tab"     -> getFocusedInput()?.performAction(
+                        AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
+                    "escape"  -> performGlobalAction(GLOBAL_ACTION_BACK)
+                    "back"    -> performGlobalAction(GLOBAL_ACTION_BACK)
+                    "home"    -> performGlobalAction(GLOBAL_ACTION_HOME)
+                    "recents" -> performGlobalAction(GLOBAL_ACTION_RECENTS)
                 }
             }
         }
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun toPixels(obj: JSONObject): Pair<Float, Float>? {
         if (!obj.has("x") || !obj.has("y")) return null
         val (w, h) = ScreenMetrics.realSize(this)
-        val px = (obj.optDouble("x").toFloat() * w).coerceIn(0f, w - 1f)
-        val py = (obj.optDouble("y").toFloat() * h).coerceIn(0f, h - 1f)
-        return px to py
+        return (obj.optDouble("x").toFloat() * w).coerceIn(0f, w - 1f) to
+               (obj.optDouble("y").toFloat() * h).coerceIn(0f, h - 1f)
     }
 
     private fun performTap(px: Float, py: Float) {
-        val path = Path().apply { moveTo(px, py); lineTo(px + 0.1f, py) }
-        dispatchStroke(path, 0, 80, willContinue = false)
+        val path = Path().apply { moveTo(px, py); lineTo(px + 1f, py) }
+        val stroke = GestureDescription.StrokeDescription(path, 0, 80)
+        dispatchGesture(GestureDescription.Builder().addStroke(stroke).build(), null, null)
     }
 
-    private fun dispatchStroke(path: Path, startTime: Long, duration: Long, willContinue: Boolean) {
-        val stroke = GestureDescription.StrokeDescription(path, startTime, duration, willContinue)
-        val gesture = GestureDescription.Builder().addStroke(stroke).build()
-        dispatchGesture(gesture, null, null)
-    }
-
-    /**
-     * FIX gõ chữ: dùng clipboard paste thay vì inject từng ký tự.
-     * Paste 1 lần sau debounce → không bị nhân ký tự.
-     */
-    private fun flushPendingText() {
-        val text = pendingText.toString()
-        pendingText.clear()
-        if (text.isEmpty()) return
-        try {
-            val clip = android.content.ClipData.newPlainText("t", text)
-            (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager)
-                .setPrimaryClip(clip)
-            // Paste vào node đang focus
-            val node = rootInActiveWindow
-                ?.findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT)
-            node?.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_PASTE)
-        } catch (e: Exception) {
-            Log.e(TAG, "flushPendingText error: ${e.message}")
-        }
-    }
-
-    private fun deleteLastChar() {
-        try {
-            val node = rootInActiveWindow
-                ?.findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT)
-                ?: return
-            val text = node.text?.toString() ?: return
-            if (text.isEmpty()) return
-            val args = android.os.Bundle().apply {
-                putCharSequence(
-                    android.view.accessibility.AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
-                    text.dropLast(1))
-            }
-            node.performAction(
-                android.view.accessibility.AccessibilityNodeInfo.ACTION_SET_TEXT, args)
-        } catch (e: Exception) {
-            Log.e(TAG, "deleteLastChar error: ${e.message}")
-        }
-    }
-
-    private fun performActionOnFocus(action: Int) {
-        try {
-            rootInActiveWindow
-                ?.findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT)
-                ?.performAction(action)
-        } catch (e: Exception) {}
-    }
+    private fun getFocusedInput(): AccessibilityNodeInfo? = try {
+        rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+    } catch (e: Exception) { null }
 
     private fun sendScreenInfo() {
         val (w, h) = ScreenMetrics.realSize(this)
-        val reply = JSONObject().apply {
+        ControlCommandBus.publishReply(JSONObject().apply {
             put("type", "screen_orientation")
             put("landscape", w > h)
-            put("w", w)
-            put("h", h)
-        }
-        ControlCommandBus.publishReply(reply.toString())
+            put("w", w); put("h", h)
+        }.toString())
     }
 
-    // Khi điện thoại xoay → tự động thông báo cho Máy A
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
-        handler.postDelayed({ sendScreenInfo() }, 200) // Chờ layout update xong
+        handler.postDelayed({ sendScreenInfo() }, 300)
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // Reset text tracker khi focus đổi sang field khác
+        if (event?.eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED) {
+            currentFieldText.clear()
+        }
+    }
     override fun onInterrupt() {}
 
     override fun onDestroy() {
-        handler.removeCallbacks(textFlushRunnable)
+        handler.removeCallbacks { }
         ControlCommandBus.unsubscribe()
         if (::prefs.isInitialized)
             prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
