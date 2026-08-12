@@ -97,15 +97,14 @@ class PeerConnectionManager(
         videoTrack.setEnabled(true)
         val videoSender = pc.addTrack(videoTrack, listOf("stream_id"))
 
-        // Ép bitrate cao nhất có thể — WebRTC không tự nâng nếu không set
+        // Ép bitrate cao nhất có thể
         videoSender?.let { sender ->
             val params = sender.parameters
             params.encodings.forEach { encoding ->
                 encoding.maxBitrateBps = 8_000_000   // 8Mbps max
-                encoding.minBitrateBps = 2_000_000   // 2Mbps min — không tụt xuống thấp
+                encoding.minBitrateBps = 2_000_000   // 2Mbps min
                 encoding.maxFramerate = 30
-                encoding.networkPriority = org.webrtc.RtpParameters.Priority.HIGH
-                encoding.bitratePriority = 4.0        // Ưu tiên video cao nhất
+                encoding.bitratePriority = 4.0
             }
             sender.parameters = params
         }
@@ -113,12 +112,10 @@ class PeerConnectionManager(
         audioTrack?.let {
             it.setEnabled(true)
             val audioSender = pc.addTrack(it, listOf("stream_id"))
-            // Audio không cần nhiều bandwidth — ưu tiên thấp hơn video
             audioSender?.let { as_ ->
                 val p = as_.parameters
                 p.encodings.forEach { enc ->
-                    enc.maxBitrateBps = 64_000  // 64kbps audio là đủ
-                    enc.networkPriority = org.webrtc.RtpParameters.Priority.LOW
+                    enc.maxBitrateBps = 64_000
                 }
                 as_.parameters = p
             }
