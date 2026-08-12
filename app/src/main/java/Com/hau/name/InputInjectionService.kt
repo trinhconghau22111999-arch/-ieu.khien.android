@@ -215,6 +215,23 @@ class InputInjectionService : AccessibilityService() {
         } catch (e: Exception) {}
     }
 
+    private fun sendScreenInfo() {
+        val (w, h) = ScreenMetrics.realSize(this)
+        val reply = JSONObject().apply {
+            put("type", "screen_orientation")
+            put("landscape", w > h)
+            put("w", w)
+            put("h", h)
+        }
+        ControlCommandBus.publishReply(reply.toString())
+    }
+
+    // Khi điện thoại xoay → tự động thông báo cho Máy A
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        handler.postDelayed({ sendScreenInfo() }, 200) // Chờ layout update xong
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
     override fun onInterrupt() {}
 

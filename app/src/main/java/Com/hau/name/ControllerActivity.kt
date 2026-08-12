@@ -177,13 +177,13 @@ class ControllerActivity : AppCompatActivity() {
         layoutCodeEntry.visibility = View.GONE
         remoteViewContainer.visibility = View.VISIBLE
 
-        // Fix 2: Ẩn nút Ngắt + nút Bàn phím khi vừa kết nối
+        // Ẩn nút Ngắt + nút Bàn phím khi vừa kết nối
         btnDisconnect.visibility = View.GONE
         btnToggleKeyboard.visibility = View.GONE
 
         // Ẩn status bar
         hideSystemUI()
-        lockLandscape()
+        // KHÔNG khóa orientation cứng — chờ Máy B gửi orientation thực tế
         setupTouchHandler()
 
         sendCommand(JSONObject().apply { put("type", "request_screen_size") })
@@ -281,9 +281,19 @@ class ControllerActivity : AppCompatActivity() {
     private fun handleIncomingMessage(json: String) {
         try {
             val obj = JSONObject(json)
-            if (obj.optString("type") == "screen_size") {
-                remoteW = obj.getInt("w"); remoteH = obj.getInt("h")
-                runOnUiThread { updateVideoRect() }
+            when (obj.optString("type")) {
+                "screen_size", "screen_orientation" -> {
+                    remoteW = obj.getInt("w"); remoteH = obj.getInt("h")
+                    val isLandscape = obj.optBoolean("landscape", remoteW > remoteH)
+                    runOnUiThread {
+                        // Xoay màn hình Máy A theo chiều của Máy B
+                        requestedOrientation = if (isLandscape)
+                            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                        else
+                            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                        updateVideoRect()
+                    }
+                }
             }
         } catch (_: Exception) {}
     }
@@ -350,7 +360,8 @@ class ControllerActivity : AppCompatActivity() {
         remoteViewContainer.visibility = View.GONE
         layoutCodeEntry.visibility = View.VISIBLE
         showSystemUI()
-        unlockOrientation()
+        // Trả về auto orientation khi ngắt
+        requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         setupLastServerButton()
     }
 

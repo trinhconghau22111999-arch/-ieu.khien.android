@@ -131,6 +131,9 @@ class RemoteHostService : Service() {
         val (capW, capH) = scaledCaptureSize(rawW, rawH)
         screenCapturer!!.startCapture(capW, capH, CAPTURE_FPS)
 
+        // Gửi orientation ban đầu
+        sendOrientationToClient(rawW, rawH)
+
         // ── AUDIO ──────────────────────────────────────────────────────────────
         // AudioSource WebRTC mặc định chỉ capture mic. Để stream âm thanh hệ thống
         // (tiếng app, nhạc, video) cần dùng AudioPlaybackCaptureConfiguration
@@ -274,6 +277,18 @@ class RemoteHostService : Service() {
     }
 
     private fun prefs() = getSharedPreferences("remote_assist", MODE_PRIVATE)
+
+    // ── Gửi orientation về Máy A ─────────────────────────────────────────────
+    private fun sendOrientationToClient(w: Int, h: Int) {
+        val isLandscape = w > h
+        val reply = org.json.JSONObject().apply {
+            put("type", "screen_orientation")
+            put("landscape", isLandscape)
+            put("w", w)
+            put("h", h)
+        }
+        ControlCommandBus.publishReply(reply.toString())
+    }
 
     // ── Cleanup ───────────────────────────────────────────────────────────────
 
