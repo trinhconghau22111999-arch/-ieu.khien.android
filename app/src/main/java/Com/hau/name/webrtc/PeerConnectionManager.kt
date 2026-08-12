@@ -95,11 +95,33 @@ class PeerConnectionManager(
 
         val videoTrack = factory.createVideoTrack("video_track", videoSource)
         videoTrack.setEnabled(true)
-        pc.addTrack(videoTrack, listOf("stream_id"))
+        val videoSender = pc.addTrack(videoTrack, listOf("stream_id"))
+
+        // Ép bitrate cao nhất có thể — WebRTC không tự nâng nếu không set
+        videoSender?.let { sender ->
+            val params = sender.parameters
+            params.encodings.forEach { encoding ->
+                encoding.maxBitrateBps = 8_000_000   // 8Mbps max
+                encoding.minBitrateBps = 2_000_000   // 2Mbps min — không tụt xuống thấp
+                encoding.maxFramerate = 30
+                encoding.networkPriority = org.webrtc.RtpParameters.Priority.HIGH
+                encoding.bitratePriority = 4.0        // Ưu tiên video cao nhất
+            }
+            sender.parameters = params
+        }
 
         audioTrack?.let {
             it.setEnabled(true)
-            pc.addTrack(it, listOf("stream_id"))
+            val audioSender = pc.addTrack(it, listOf("stream_id"))
+            // Audio không cần nhiều bandwidth — ưu tiên thấp hơn video
+            audioSender?.let { as_ ->
+                val p = as_.parameters
+                p.encodings.forEach { enc ->
+                    enc.maxBitrateBps = 64_000  // 64kbps audio là đủ
+                    enc.networkPriority = org.webrtc.RtpParameters.Priority.LOW
+                }
+                as_.parameters = p
+            }
         }
 
         val dcInit = DataChannel.Init().apply { ordered = true }
@@ -194,8 +216,23 @@ class PeerConnectionManager(
         val config = PeerConnection.RTCConfiguration(ICE_SERVERS).apply {
             sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
             continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
-            // Tắt CPU throttle — cho phép dùng tối đa CPU để encode nhanh
             enableCpuOveruseDetection = false
+
+            // ── Tối ưu network ────────────────────────────────────────────
+            // Ưu tiên kết nối trực tiếp LAN (nhanh nhất)
+            iceTransportsType = PeerConnection.IceTransportsType.ALL
+
+            // Tắt bundle — gửi video/audio/data trên channel riêng → ít overhead
+            bundlePolicy = PeerConnection.BundlePolicy.MAXBUNDLE
+
+            // RTCP multiplexing — giảm số connection cần duy trì
+            rtcpMuxPolicy = PeerConnection.RtcpMuxPolicy.REQUIRE
+
+            // TCP fallback khi UDP bị block
+            tcpCandidatePolicy = PeerConnection.TcpCandidatePolicy.ENABLED
+
+            // Tắt encryption key renegotiation — giảm overhead
+            keyType = PeerConnection.KeyType.ECDSA
         }
         val pc = factory.createPeerConnection(config, object : PeerConnection.Observer {
             override fun onIceCandidate(c: IceCandidate) {

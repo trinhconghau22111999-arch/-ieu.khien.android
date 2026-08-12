@@ -44,6 +44,7 @@ class ControllerActivity : AppCompatActivity() {
     private val eglBase: EglBase = EglBase.create()
     private var peerConnectionManager: PeerConnectionManager? = null
     private var signalingClient: SignalingClient? = null
+    private var wifiLock: android.net.wifi.WifiManager.WifiLock? = null
 
     // ── State ─────────────────────────────────────────────────────────────────
     private lateinit var prefs: SharedPreferences
@@ -176,6 +177,13 @@ class ControllerActivity : AppCompatActivity() {
         isConnected = true
         layoutCodeEntry.visibility = View.GONE
         remoteViewContainer.visibility = View.VISIBLE
+
+        // Giữ WiFi HIGH PERF khi đang điều khiển
+        val wm = applicationContext.getSystemService(android.content.Context.WIFI_SERVICE)
+            as android.net.wifi.WifiManager
+        wifiLock = wm.createWifiLock(
+            android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "RemoteAssist:ControllerWifi")
+        wifiLock?.acquire()
 
         // Ẩn nút Ngắt + nút Bàn phím khi vừa kết nối
         btnDisconnect.visibility = View.GONE
@@ -355,6 +363,7 @@ class ControllerActivity : AppCompatActivity() {
     private fun disconnect() {
         isConnected = false
         handler.removeCallbacks(hideControlsRunnable)
+        try { wifiLock?.release(); wifiLock = null } catch (_: Exception) {}
         signalingClient?.release(); signalingClient = null
         peerConnectionManager?.release(); peerConnectionManager = null
         remoteViewContainer.visibility = View.GONE

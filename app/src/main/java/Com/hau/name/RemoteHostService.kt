@@ -54,9 +54,24 @@ class RemoteHostService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    private var wakeLock: android.os.PowerManager.WakeLock? = null
+    private var wifiLock: android.net.wifi.WifiManager.WifiLock? = null
+
     override fun onCreate() {
         super.onCreate()
         isRunning = true
+
+        // Giữ CPU chạy full khi màn hình tắt — tránh throttle encode
+        val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
+        wakeLock = pm.newWakeLock(
+            android.os.PowerManager.PARTIAL_WAKE_LOCK, "RemoteAssist:WakeLock")
+        wakeLock?.acquire(12 * 60 * 60 * 1000L) // 12 giờ max
+
+        // Giữ WiFi HIGH PERFORMANCE — tắt power saving mode của WiFi chip
+        val wm = applicationContext.getSystemService(WIFI_SERVICE) as android.net.wifi.WifiManager
+        wifiLock = wm.createWifiLock(
+            android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "RemoteAssist:WifiLock")
+        wifiLock?.acquire()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -130,6 +145,9 @@ class RemoteHostService : Service() {
         val (rawW, rawH) = ScreenMetrics.realSize(this)
         val (capW, capH) = scaledCaptureSize(rawW, rawH)
         screenCapturer!!.startCapture(capW, capH, CAPTURE_FPS)
+
+        // Nâng priority thread encode lên cao nhất
+        android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY)
 
         // Gửi orientation ban đầu
         sendOrientationToClient(rawW, rawH)
@@ -296,6 +314,10 @@ class RemoteHostService : Service() {
         if (isCleanedUp) return
         isCleanedUp = true
         isRunning = false
+
+        // Release wake/wifi locks
+        try { wakeLock?.release(); wakeLock = null } catch (_: Exception) {}
+        try { wifiLock?.release(); wifiLock = null } catch (_: Exception) {}
 
         SystemAudioBus.stopCapture()
         screenCapturer?.stopCapture()
