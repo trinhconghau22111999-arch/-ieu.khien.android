@@ -37,7 +37,7 @@ class SignalingClient(
         fun onRemoteDisconnected()
     }
 
-    private val db = FirebaseDatabase.getInstance().reference.child("rooms").child(roomCode)
+    private val db = FirebaseDatabase.getInstance("https://checkinonline-785d5-default-rtdb.asia-southeast1.firebasedatabase.app").reference.child("rooms").child(roomCode)
     private val listeners = mutableListOf<Pair<com.google.firebase.database.DatabaseReference, ValueEventListener>>()
     private var released = false
 

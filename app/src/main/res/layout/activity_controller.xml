@@ -122,6 +122,39 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
+        <!-- Overlay kết nối -->
+        <LinearLayout
+            android:id="@+id/connecting_overlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="#CC000000"
+            android:visibility="gone">
+
+            <ProgressBar
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:indeterminate="true"
+                android:indeterminateTint="#FFFFFF" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="Đang kết nối..."
+                android:textColor="#FFFFFF"
+                android:textSize="18sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Đảm bảo Máy B đang bật và cùng mạng"
+                android:textColor="#AAAAAA"
+                android:textSize="13sp" />
+        </LinearLayout>
+
         <!-- Nút ngắt đã xóa — ngắt bằng cách bấm giữ nút bàn phím 2 giây -->
 
         <Button
