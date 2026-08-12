@@ -13,7 +13,6 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import Com.hau.name.webrtc.PeerConnectionManager
@@ -146,35 +145,14 @@ class ControllerActivity : AppCompatActivity() {
         }
     }
 
-    private var connectTimeoutRunnable: Runnable? = null
-
     private fun connectTo(code: String) {
         if (isConnected) return
         prefs.edit().putString("last_room_code", code).apply()
 
-        // Hiện màn hình remote ngay với overlay "Đang kết nối..."
-        layoutCodeEntry.visibility = View.GONE
-        remoteViewContainer.visibility = View.VISIBLE
-        findViewById<android.view.View>(R.id.connecting_overlay)?.visibility = android.view.View.VISIBLE
-
-        // Timeout 20s nếu không kết nối được
-        connectTimeoutRunnable = Runnable {
-            if (!isConnected) {
-                android.widget.Toast.makeText(this,
-                    "Không kết nối được — kiểm tra mã và đảm bảo 2 máy cùng mạng",
-                    android.widget.Toast.LENGTH_LONG).show()
-                disconnect()
-            }
-        }
-        handler.postDelayed(connectTimeoutRunnable!!, 20000)
-
         val sig = SignalingClient(
             roomCode = code, isHost = false,
             listener = object : SignalingClient.Listener {
-                override fun onOfferReceived(sdp: String) {
-                    Log.d("Controller", "Nhận offer từ Máy B")
-                    peerConnectionManager?.handleOffer(sdp)
-                }
+                override fun onOfferReceived(sdp: String) { peerConnectionManager?.handleOffer(sdp) }
                 override fun onAnswerReceived(sdp: String) {}
                 override fun onIceCandidateReceived(sdpMid: String, sdpMLineIndex: Int, candidate: String) {
                     peerConnectionManager?.addIceCandidate(sdpMid, sdpMLineIndex, candidate)
@@ -198,11 +176,6 @@ class ControllerActivity : AppCompatActivity() {
 
     private fun onWebRtcConnected() {
         isConnected = true
-        // Cancel timeout
-        connectTimeoutRunnable?.let { handler.removeCallbacks(it) }
-        connectTimeoutRunnable = null
-        // Ẩn overlay "Đang kết nối..."
-        findViewById<android.view.View>(R.id.connecting_overlay)?.visibility = android.view.View.GONE
         layoutCodeEntry.visibility = View.GONE
         remoteViewContainer.visibility = View.VISIBLE
 
@@ -392,8 +365,6 @@ class ControllerActivity : AppCompatActivity() {
     private fun disconnect() {
         isConnected = false
         handler.removeCallbacks(hideControlsRunnable)
-        connectTimeoutRunnable?.let { handler.removeCallbacks(it) }
-        connectTimeoutRunnable = null
         try { wifiLock?.release(); wifiLock = null } catch (_: Exception) {}
         signalingClient?.release(); signalingClient = null
         peerConnectionManager?.release(); peerConnectionManager = null
