@@ -31,8 +31,7 @@ class ControllerActivity : AppCompatActivity() {
     private lateinit var textLastCode: TextView
     private lateinit var remoteViewContainer: View
     private lateinit var surfaceView: SurfaceViewRenderer
-    private lateinit var btnDisconnect: Button
-    private lateinit var btnToggleKeyboard: Button
+        private lateinit var btnToggleKeyboard: Button
     private lateinit var layoutKeyboardBar: LinearLayout
     private lateinit var editRemoteText: EditText
     private lateinit var btnKeyTab: Button
@@ -75,7 +74,6 @@ class ControllerActivity : AppCompatActivity() {
         textLastCode        = findViewById(R.id.text_last_code)
         remoteViewContainer = findViewById(R.id.remote_view_container)
         surfaceView         = findViewById(R.id.surface_view)
-        btnDisconnect       = findViewById(R.id.btn_disconnect)
         btnToggleKeyboard   = findViewById(R.id.btn_toggle_keyboard)
         layoutKeyboardBar   = findViewById(R.id.layout_keyboard_bar)
         editRemoteText      = findViewById(R.id.edit_remote_text)
@@ -97,8 +95,8 @@ class ControllerActivity : AppCompatActivity() {
         if (android.os.Build.VERSION.SDK_INT >= 30) {
             window.insetsController?.let {
                 it.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
-                it.systemBarsBehavior =
-                    WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                // BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE = vuốt từ cạnh mới hiện, tự ẩn sau 3s
+                it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             }
         } else {
             window.decorView.systemUiVisibility = (
@@ -107,6 +105,7 @@ class ControllerActivity : AppCompatActivity() {
                 or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                 or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                 or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
             )
         }
     }
@@ -185,8 +184,7 @@ class ControllerActivity : AppCompatActivity() {
             android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "RemoteAssist:ControllerWifi")
         wifiLock?.acquire()
 
-        // Ẩn nút Ngắt + nút Bàn phím khi vừa kết nối
-        btnDisconnect.visibility = View.GONE
+        // Ẩn hoàn toàn nút Ngắt — dùng nút bàn phím thay thế
         btnToggleKeyboard.visibility = View.GONE
 
         // Ẩn status bar
@@ -199,13 +197,11 @@ class ControllerActivity : AppCompatActivity() {
 
     // ── Touch: hiện/ẩn nút khi chạm góc ─────────────────────────────────────
     private val hideControlsRunnable = Runnable {
-        btnDisconnect.visibility = View.GONE
         btnToggleKeyboard.visibility = View.GONE
     }
     private val handler = Handler(Looper.getMainLooper())
 
     private fun showControlsTemporarily() {
-        btnDisconnect.visibility = View.VISIBLE
         btnToggleKeyboard.visibility = View.VISIBLE
         handler.removeCallbacks(hideControlsRunnable)
         handler.postDelayed(hideControlsRunnable, 3000) // ẩn sau 3 giây
@@ -312,14 +308,20 @@ class ControllerActivity : AppCompatActivity() {
 
     // ── Fix 4: Keyboard — chỉ gửi text MỚI thêm vào, không gửi lại toàn bộ ──
     private fun setupKeyboard() {
+        // Bấm 1 lần: mở/đóng bàn phím
         btnToggleKeyboard.setOnClickListener {
             val show = layoutKeyboardBar.visibility != View.VISIBLE
             layoutKeyboardBar.visibility = if (show) View.VISIBLE else View.GONE
             if (show) {
-                // Reset tracker mỗi lần mở bàn phím
                 lastSentText = ""
                 editRemoteText.setText("")
             }
+        }
+        // Bấm giữ 2 giây: ngắt kết nối
+        btnToggleKeyboard.setOnLongClickListener {
+            android.widget.Toast.makeText(this, "Đã ngắt kết nối", android.widget.Toast.LENGTH_SHORT).show()
+            disconnect()
+            true
         }
 
         // Theo dõi từng ký tự thêm vào — chỉ gửi phần MỚI
@@ -356,9 +358,7 @@ class ControllerActivity : AppCompatActivity() {
         sendCommand(JSONObject().apply { put("type", "key_event"); put("key", key) })
     }
 
-    private fun setupDisconnect() {
-        btnDisconnect.setOnClickListener { disconnect() }
-    }
+    private fun setupDisconnect() { /* nút ngắt đã xóa, dùng long press bàn phím */ }
 
     private fun disconnect() {
         isConnected = false
