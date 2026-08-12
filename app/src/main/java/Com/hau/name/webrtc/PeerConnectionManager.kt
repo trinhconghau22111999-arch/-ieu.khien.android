@@ -48,10 +48,15 @@ class PeerConnectionManager(
         val adm = if (isHost) buildAudioDeviceModule() else null
         audioDeviceModule = adm
 
+        // Ưu tiên hardware encoder (H264 HW) — nhanh gấp 5-10x software encode
+        // enableIntelVp8Encoder=true, enableH264HighProfile=true
+        val encoderFactory = DefaultVideoEncoderFactory(eglBase.eglBaseContext, true, true)
+        val decoderFactory = DefaultVideoDecoderFactory(eglBase.eglBaseContext)
+
         factory = PeerConnectionFactory.builder()
             .setOptions(PeerConnectionFactory.Options())
-            .setVideoEncoderFactory(DefaultVideoEncoderFactory(eglBase.eglBaseContext, true, true))
-            .setVideoDecoderFactory(DefaultVideoDecoderFactory(eglBase.eglBaseContext))
+            .setVideoEncoderFactory(encoderFactory)
+            .setVideoDecoderFactory(decoderFactory)
             .apply { if (adm != null) setAudioDeviceModule(adm) }
             .createPeerConnectionFactory()
     }
@@ -189,6 +194,8 @@ class PeerConnectionManager(
         val config = PeerConnection.RTCConfiguration(ICE_SERVERS).apply {
             sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
             continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
+            // Tắt CPU throttle — cho phép dùng tối đa CPU để encode nhanh
+            enableCpuOveruseDetection = false
         }
         val pc = factory.createPeerConnection(config, object : PeerConnection.Observer {
             override fun onIceCandidate(c: IceCandidate) {

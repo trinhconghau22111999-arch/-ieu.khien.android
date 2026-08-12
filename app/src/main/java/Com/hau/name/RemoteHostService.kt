@@ -333,9 +333,9 @@ class RemoteHostService : Service() {
         const val ACTION_NEW_CODE = "action_new_code"
 
         private const val NOTIF_ID = 42
-        // Dùng kích thước thật của màn hình điện thoại — không scale xuống
-        // WebRTC tự encode H264 với bitrate phù hợp
-        private const val CAPTURE_MAX_DIM = 9999  // Không giới hạn — dùng độ phân giải thật
+        // 720p = điểm cân bằng tốt nhất: sắc nét đủ dùng + encode nhanh + ít lag
+        // 1080p trở lên làm CPU điện thoại encode không kịp → lag hình
+        private const val CAPTURE_MAX_DIM = 1280  // 720p landscape (1280x720)
         private const val CAPTURE_FPS = 30
         const val AUDIO_SAMPLE_RATE = 44100
 
