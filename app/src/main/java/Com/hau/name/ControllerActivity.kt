@@ -87,6 +87,8 @@ class ControllerActivity : AppCompatActivity() {
         surfaceView.init(eglBase.eglBaseContext, null)
         surfaceView.setEnableHardwareScaler(true)
         surfaceView.setMirror(false)
+        // Fit toàn bộ hình vào màn hình, không cắt xén
+        surfaceView.setScalingType(org.webrtc.RendererCommon.ScalingType.SCALE_ASPECT_FIT)
     }
 
     // ── Fix 2: Ẩn status bar + navigation bar (toàn màn hình thật sự) ────────
