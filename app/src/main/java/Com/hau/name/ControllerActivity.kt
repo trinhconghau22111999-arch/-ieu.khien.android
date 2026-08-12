@@ -228,7 +228,16 @@ class ControllerActivity : AppCompatActivity() {
                     })
                 }
                 MotionEvent.ACTION_MOVE -> {
+                    // Gửi TẤT CẢ historical points → vuốt mượt, không bị giật
                     for (i in 0 until event.pointerCount) {
+                        val histCount = event.getHistorySize()
+                        for (h in 0 until histCount) {
+                            val (nx, ny) = normalize(event.getHistoricalX(i, h), event.getHistoricalY(i, h))
+                            sendCommand(JSONObject().apply {
+                                put("type", "touch_move"); put("x", nx); put("y", ny); put("ptr", i)
+                            })
+                        }
+                        // Điểm hiện tại
                         val (nx, ny) = normalize(event.getX(i), event.getY(i))
                         sendCommand(JSONObject().apply {
                             put("type", "touch_move"); put("x", nx); put("y", ny); put("ptr", i)

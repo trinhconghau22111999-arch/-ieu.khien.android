@@ -10,11 +10,16 @@ android {
 
     defaultConfig {
         applicationId = "Com.hau.name"
-        minSdk = 21          // Android 5.0 trở lên — thấp nhất WebRTC hỗ trợ
-        targetSdk = 26       // Android 8 — thấp nhất vẫn pass Google policy
-        versionCode = 2
-        versionName = "2.0"
+        minSdk = 24          // Android 7.0 — yêu cầu tối thiểu
+        targetSdk = 34
+        versionCode = 3
+        versionName = "3.0"
         multiDexEnabled = false
+
+        // Hỗ trợ TẤT CẢ chip: ARM 32/64, x86, x86_64 (Huawei dùng ARM64 + ARM32)
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+        }
     }
 
     buildTypes {
@@ -24,11 +29,12 @@ android {
         }
         getByName("release") {
             isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8   // Java 8 — thấp nhất, mọi Android đều chạy
+        sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
     kotlinOptions {
@@ -39,6 +45,20 @@ android {
     }
     lint {
         abortOnError = false
+    }
+
+    // Build APK riêng cho từng ABI — ai dùng chip gì tải cái đó
+    splits {
+        abi {
+            isEnable = false  // Tắt split, dùng fat APK (1 file cài được mọi chip)
+        }
+    }
+
+    packaging {
+        // Giữ tất cả .so của WebRTC cho mọi ABI
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 }
 
@@ -53,7 +73,7 @@ dependencies {
     implementation("com.google.firebase:firebase-database-ktx")
     implementation("com.google.firebase:firebase-auth-ktx")
 
-    // WebRTC
+    // WebRTC — fat AAR chứa tất cả ABI
     implementation("io.github.webrtc-sdk:android:125.6422.06.1")
 
     // Coroutines
