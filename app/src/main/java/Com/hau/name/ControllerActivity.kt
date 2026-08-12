@@ -87,7 +87,8 @@ class ControllerActivity : AppCompatActivity() {
         surfaceView.init(eglBase.eglBaseContext, null)
         surfaceView.setEnableHardwareScaler(true)
         surfaceView.setMirror(false)
-        // Fit toàn bộ hình vào màn hình, không cắt xén
+        // SCALE_ASPECT_FIT: giữ đúng tỉ lệ gốc của Máy B, viền đen phần dư
+        // Đây là cách duy nhất để tọa độ cảm ứng khớp hoàn toàn với hình
         surfaceView.setScalingType(org.webrtc.RendererCommon.ScalingType.SCALE_ASPECT_FIT)
     }
 
@@ -263,15 +264,21 @@ class ControllerActivity : AppCompatActivity() {
     }
 
     private fun updateVideoRect() {
-        if (remoteW == 0 || remoteH == 0) {
-            videoRect = VideoRect(0f, 0f, surfaceView.width.toFloat(), surfaceView.height.toFloat())
-            return
-        }
         val vw = surfaceView.width.toFloat()
         val vh = surfaceView.height.toFloat()
-        val scale = minOf(vw / remoteW, vh / remoteH)
-        val drawW = remoteW * scale; val drawH = remoteH * scale
-        val left = (vw - drawW) / 2f; val top = (vh - drawH) / 2f
+        if (remoteW == 0 || remoteH == 0 || vw == 0f || vh == 0f) {
+            videoRect = VideoRect(0f, 0f, vw, vh)
+            return
+        }
+        // Tính chính xác vùng video thật trên SurfaceView
+        // SCALE_ASPECT_FIT: scale đều 2 chiều, giữ đúng tỉ lệ, viền đen phần dư
+        val scaleX = vw / remoteW.toFloat()
+        val scaleY = vh / remoteH.toFloat()
+        val scale = minOf(scaleX, scaleY)  // Lấy scale nhỏ hơn để fit hoàn toàn
+        val drawW = remoteW * scale
+        val drawH = remoteH * scale
+        val left = (vw - drawW) / 2f   // Căn giữa ngang
+        val top  = (vh - drawH) / 2f   // Căn giữa dọc
         videoRect = VideoRect(left, top, left + drawW, top + drawH)
     }
 
