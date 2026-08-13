@@ -94,11 +94,17 @@ class RemoteHostService : Service() {
         roomCode = intent?.getStringExtra(EXTRA_ROOM_CODE)
         val projectionData = intent?.getParcelableExtra<Intent>(EXTRA_PROJECTION_DATA)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIF_ID, buildNotification(),
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
-        } else {
-            startForeground(NOTIF_ID, buildNotification())
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIF_ID, buildNotification(),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+            } else {
+                startForeground(NOTIF_ID, buildNotification())
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "startForeground error: ${e.message}")
+            // Fallback không có type
+            try { startForeground(NOTIF_ID, buildNotification()) } catch (_: Exception) {}
         }
 
         if (roomCode != null && projectionData != null) {
