@@ -4,7 +4,55 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+
+    <!-- Màn hình máy tính bảng (trái) -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M54,27 L81,67.5 L27,67.5 Z"/>
+        android:pathData="M8,28 L8,80 Q8,84 12,84 L50,84 Q54,84 54,80 L54,28 Q54,24 50,24 L12,24 Q8,24 8,28 Z"/>
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M11,30 L11,78 L51,78 L51,30 Z"/>
+    <!-- Camera tablet -->
+    <circle android:fillColor="#FFFFFF" cx="31" cy="81.5" r="2"/>
+
+    <!-- Màn hình điện thoại (phải) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M62,22 L62,86 Q62,90 66,90 L96,90 Q100,90 100,86 L100,22 Q100,18 96,18 L66,18 Q62,18 62,22 Z"/>
+    <path
+        android:fillColor="#0D47A1"
+        android:pathData="M65,25 L65,83 L97,83 L97,25 Z"/>
+    <!-- Notch điện thoại -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M76,20 L86,20 Q88,20 88,22 L88,23 Q88,25 86,25 L76,25 Q74,25 74,23 L74,22 Q74,20 76,20 Z"/>
+    <!-- Home button -->
+    <circle android:fillColor="#FFFFFF" cx="81" cy="87" r="2.5"/>
+
+    <!-- Mũi tên kết nối giữa 2 máy -->
+    <path
+        android:fillColor="#4FC3F7"
+        android:strokeColor="#4FC3F7"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M54,46 L62,46"/>
+    <path
+        android:fillColor="#4FC3F7"
+        android:pathData="M59,42 L63,46 L59,50 Z"/>
+
+    <!-- WiFi sóng nhỏ phía trên -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M27,14 Q31,10 35,14"
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"/>
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M23,10 Q31,4 39,10"
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"/>
+    <circle android:fillColor="#00E5FF" cx="31" cy="17" r="2"/>
+
 </vector>

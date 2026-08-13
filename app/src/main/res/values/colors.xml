@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#1B3A70</color>
+    <color name="ic_launcher_background">#1565C0</color>
     <color name="ic_launcher_screen">#4C8DFF</color>
     <color name="ic_launcher_cursor">#FFB020</color>
     <color name="btn_role_controlled_bg">#C62828</color>
