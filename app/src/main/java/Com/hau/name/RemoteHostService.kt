@@ -358,7 +358,7 @@ class RemoteHostService : Service() {
         // 720px + 20fps: hình nét hơn 600px, FPS thấp hơn giúp encode nhanh → ít lag
         // Bitrate cao (8Mbps) đảm bảo mỗi frame đều sắc nét dù FPS thấp hơn
         private const val CAPTURE_MAX_DIM = 720
-        private const val CAPTURE_FPS = 20
+        private const val CAPTURE_FPS = 15
         const val AUDIO_SAMPLE_RATE = 44100
 
         /** ConsentActivity dùng để biết có cần xin lại quyền màn hình không */
