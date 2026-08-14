@@ -42,13 +42,13 @@ class SignalingClient(
     private var released = false
 
     init {
+        // keepSynced giúp Firebase duy trì kết nối ngay cả trên máy yếu
+        db.keepSynced(true)
         if (isHost) {
-            // Máy B: lắng nghe answer và ICE từ Máy A ngay khi tạo
             listenForAnswer()
             listenForIce(fromHost = false)
             listenForStatus()
         }
-        // Máy A: gọi startListening() sau khi PeerConnection đã init
     }
 
     /** Máy A gọi sau init để bắt đầu nhận offer */

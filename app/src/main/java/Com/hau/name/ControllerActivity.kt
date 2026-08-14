@@ -369,6 +369,22 @@ class ControllerActivity : AppCompatActivity() {
 
     private fun setupDisconnect() { /* nút ngắt đã xóa, dùng long press bàn phím */ }
 
+    private fun requestIgnoreBatteryOptimization() {
+        try {
+            val pm = getSystemService(android.content.Context.POWER_SERVICE)
+                as android.os.PowerManager
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+                    val intent = android.content.Intent(
+                        android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = android.net.Uri.parse("package:$packageName")
+                    }
+                    try { startActivity(intent) } catch (_: Exception) {}
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
     private fun disconnect() {
         isConnected = false
         handler.removeCallbacks(hideControlsRunnable)
