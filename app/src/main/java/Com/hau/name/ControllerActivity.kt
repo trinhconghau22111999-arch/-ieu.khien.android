@@ -150,6 +150,9 @@ class ControllerActivity : AppCompatActivity() {
         if (isConnected) return
         prefs.edit().putString("last_room_code", code).apply()
 
+        // Tắt battery optimization để Firebase không bị kill trên máy yếu
+        requestIgnoreBatteryOptimization()
+
         val sig = SignalingClient(
             roomCode = code, isHost = false,
             listener = object : SignalingClient.Listener {
@@ -399,12 +402,6 @@ class ControllerActivity : AppCompatActivity() {
         setupLastServerButton()
     }
 
-    private fun lockLandscape() {
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-    }
-    private fun unlockOrientation() {
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-    }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)

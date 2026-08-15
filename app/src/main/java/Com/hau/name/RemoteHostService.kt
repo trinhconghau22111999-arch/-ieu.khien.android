@@ -120,6 +120,11 @@ class RemoteHostService : Service() {
         val sigClient = SignalingClient(roomCode = code, isHost = true, listener = buildHostListener())
         signalingClient = sigClient
 
+        // Nhận reply từ InputInjectionService (screen_size, orientation) → gửi về Máy A
+        ControlCommandBus.subscribeReply { json ->
+            peerConnectionManager?.sendControlCommand(json)
+        }
+
         val pcm = PeerConnectionManager(
             context = this,
             eglBase = eglBase,
