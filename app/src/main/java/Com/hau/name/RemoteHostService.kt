@@ -201,10 +201,13 @@ class RemoteHostService : Service() {
     private fun startSystemAudioCapture(projectionData: Intent) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
         try {
-            // Lấy MediaProjection từ projectionData để build config
+            // Tạo MediaProjection MỚI từ projectionData cho audio capture
+            // (không tái dùng cái đã dùng cho ScreenCapturer vì đã consumed)
             val projectionManager =
                 getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
-            val mp = projectionManager.getMediaProjection(android.app.Activity.RESULT_OK, projectionData)
+            // Dùng intent clone để tránh consumed
+            val mp = projectionManager.getMediaProjection(android.app.Activity.RESULT_OK,
+                projectionData.clone() as android.content.Intent)
             mediaProjection = mp
 
             val captureConfig = AudioPlaybackCaptureConfiguration.Builder(mp)
@@ -257,9 +260,13 @@ class RemoteHostService : Service() {
         signalingClient?.release()
         val newSig = SignalingClient(roomCode = code, isHost = true, listener = buildHostListener())
         signalingClient = newSig
+        // reinitForReconnect xóa PeerConnection cũ trước
         peerConnectionManager?.reinitForReconnect(newSig)
-        peerConnectionManager?.addVideoTrackAndOffer(vs, at)
-        newSig.setWaiting()
+        // Delay nhỏ để đảm bảo PC cũ đã dispose hoàn toàn
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            peerConnectionManager?.addVideoTrackAndOffer(vs, at)
+            newSig.setWaiting()
+        }, 500)
     }
 
     // ── Notification ─────────────────────────────────────────────────────────

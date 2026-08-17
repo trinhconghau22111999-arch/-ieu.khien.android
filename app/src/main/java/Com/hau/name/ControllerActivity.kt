@@ -153,6 +153,11 @@ class ControllerActivity : AppCompatActivity() {
         // Tắt battery optimization để Firebase không bị kill trên máy yếu
         requestIgnoreBatteryOptimization()
 
+        // Hiện màn hình remote ngay với text "Đang kết nối..." trên surfaceView
+        layoutCodeEntry.visibility = View.GONE
+        remoteViewContainer.visibility = View.VISIBLE
+        btnToggleKeyboard.visibility = View.GONE
+
         val sig = SignalingClient(
             roomCode = code, isHost = false,
             listener = object : SignalingClient.Listener {
@@ -195,8 +200,11 @@ class ControllerActivity : AppCompatActivity() {
 
         // Ẩn status bar
         hideSystemUI()
-        // KHÔNG khóa orientation cứng — chờ Máy B gửi orientation thực tế
-        setupTouchHandler()
+
+        // Chờ surfaceView có kích thước thật rồi mới setup touch
+        surfaceView.post {
+            setupTouchHandler()
+        }
 
         sendCommand(JSONObject().apply { put("type", "request_screen_size") })
     }

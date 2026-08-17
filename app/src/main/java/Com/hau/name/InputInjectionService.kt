@@ -51,7 +51,11 @@ class InputInjectionService : AccessibilityService() {
     }
 
     private fun handleCommand(json: String) {
-        if (roomCode == null) return
+        // Nếu roomCode null, thử đọc lại từ prefs (có thể chưa set khi service connect)
+        if (roomCode == null) {
+            roomCode = prefs.getString("active_room_code", null)
+            if (roomCode == null) return
+        }
         val obj = try { JSONObject(json) } catch (e: Exception) { return }
 
         when (obj.optString("type")) {
