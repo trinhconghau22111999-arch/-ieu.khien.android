@@ -206,7 +206,8 @@ class PeerConnectionManager(
         peerConnection = null
         audioDeviceModule?.release()
         audioDeviceModule = null
-        factory.dispose()
+        // Guard: factory chỉ dispose nếu đã init() thành công
+        if (::factory.isInitialized) factory.dispose()
     }
 
     private fun createPeerConnection(): PeerConnection? {

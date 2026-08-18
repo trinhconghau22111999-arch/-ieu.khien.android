@@ -6,7 +6,6 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.hardware.display.VirtualDisplay
 import android.media.AudioFormat
 import android.media.AudioPlaybackCaptureConfiguration
 import android.media.AudioRecord
@@ -45,7 +44,6 @@ class RemoteHostService : Service() {
     private var videoSource: VideoSource? = null
     private var audioSource: AudioSource? = null
     private var audioTrack: AudioTrack? = null
-    private var virtualDisplay: VirtualDisplay? = null
     private var surfaceTextureHelper: SurfaceTextureHelper? = null
     private val eglBase: EglBase = EglBase.create()
     private var roomCode: String? = null
@@ -113,7 +111,8 @@ class RemoteHostService : Service() {
             Log.e(TAG, "Thiếu roomCode hoặc projectionData")
             stopSelf()
         }
-        return START_STICKY
+        // START_NOT_STICKY: không tự restart vì eglBase không thể tái sử dụng sau release
+        return START_NOT_STICKY
     }
 
     private fun initWebRTC(code: String, projectionData: Intent) {
@@ -337,6 +336,10 @@ class RemoteHostService : Service() {
         try { wakeLock?.release(); wakeLock = null } catch (_: Exception) {}
         try { wifiLock?.release(); wifiLock = null } catch (_: Exception) {}
 
+        // Unsubscribe bus để tránh memory leak
+        ControlCommandBus.unsubscribe()
+        ControlCommandBus.unsubscribeReply()
+
         SystemAudioBus.stopCapture()
         screenCapturer?.stopCapture()
         screenCapturer?.dispose(); screenCapturer = null
@@ -344,7 +347,6 @@ class RemoteHostService : Service() {
         audioSource?.dispose(); audioSource = null
         videoSource?.dispose(); videoSource = null
         surfaceTextureHelper?.dispose(); surfaceTextureHelper = null
-        virtualDisplay?.release(); virtualDisplay = null
         mediaProjection?.stop(); mediaProjection = null
         signalingClient?.markEnded()
         signalingClient?.release(); signalingClient = null

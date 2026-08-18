@@ -228,7 +228,7 @@ class InputInjectionService : AccessibilityService() {
     override fun onInterrupt() {}
 
     override fun onDestroy() {
-        handler.removeCallbacks { }
+        handler.removeCallbacks(orientationUpdateRunnable)
         ControlCommandBus.unsubscribe()
         if (::prefs.isInitialized)
             prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
