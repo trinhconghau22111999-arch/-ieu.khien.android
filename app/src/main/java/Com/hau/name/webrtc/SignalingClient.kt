@@ -107,10 +107,15 @@ class SignalingClient(
 
     private fun listenForOffer() {
         val ref = db.child("offer")
+        // Dùng addValueEventListener để nhận offer kể cả khi đã có sẵn trên Firebase
+        // Nhưng track đã nhận để tránh xử lý lại offer cũ khi reconnect
+        var lastReceivedOffer = ""
         val l = object : ValueEventListener {
             override fun onDataChange(snap: DataSnapshot) {
                 val sdp = snap.getValue(String::class.java) ?: return
-                Log.d(TAG, "Nhận offer")
+                if (sdp == lastReceivedOffer) return  // Bỏ qua offer đã xử lý
+                lastReceivedOffer = sdp
+                Log.d(TAG, "Nhận offer mới")
                 listener.onOfferReceived(sdp)
             }
             override fun onCancelled(e: DatabaseError) { Log.e(TAG, "offer listen error: $e") }

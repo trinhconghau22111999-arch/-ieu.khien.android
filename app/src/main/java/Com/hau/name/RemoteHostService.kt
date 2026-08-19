@@ -79,13 +79,12 @@ class RemoteHostService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_NEW_CODE -> {
-                // Chuyển về ConsentActivity để tạo mã mới
                 val ui = Intent(this, ConsentActivity::class.java).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                     action = ACTION_NEW_CODE
                 }
                 startActivity(ui)
-                return START_STICKY
+                return START_NOT_STICKY
             }
         }
 
@@ -130,7 +129,12 @@ class RemoteHostService : Service() {
             isHost = true,
             signalingClient = sigClient,
             remoteSink = null,
-            onConnected = { Log.d(TAG, "WebRTC connected!") },
+            onConnected = {
+                Log.d(TAG, "WebRTC connected!")
+                // Gửi orientation lại sau khi DataChannel mở — đảm bảo Máy A nhận được
+                val (w, h) = ScreenMetrics.realSize(this)
+                sendOrientationToClient(w, h)
+            },
             onDisconnected = {
                 Log.d(TAG, "Máy A ngắt kết nối — chờ kết nối lại với mã $code")
                 prepareForReconnect(code)
@@ -163,17 +167,6 @@ class RemoteHostService : Service() {
         sendOrientationToClient(rawW, rawH)
 
         // ── AUDIO ──────────────────────────────────────────────────────────────
-        // AudioSource WebRTC mặc định chỉ capture mic. Để stream âm thanh hệ thống
-        // (tiếng app, nhạc, video) cần dùng AudioPlaybackCaptureConfiguration
-        // (Android 10+) với một AudioRecord riêng, rồi đẩy PCM vào JavaAudioDeviceModule.
-        //
-        // Cách đơn giản nhất tương thích với libwebrtc Android là dùng
-        // JavaAudioDeviceModule.Builder với audioRecordStateCallback để inject
-        // AudioRecord custom. Ở đây dùng cách tối giản: tạo audio track WebRTC
-        // từ AudioSource bình thường (mic) nhưng đồng thời inject audio qua
-        // custom AudioDeviceModule — xem PeerConnectionManager để biết chi tiết.
-        //
-        // Nếu thiết bị < Android 10 thì chỉ stream video, không có audio hệ thống.
         audioSource = pcm.factory.createAudioSource(org.webrtc.MediaConstraints().apply {
             mandatory.add(org.webrtc.MediaConstraints.KeyValuePair("googEchoCancellation", "false"))
             mandatory.add(org.webrtc.MediaConstraints.KeyValuePair("googNoiseSuppression", "false"))

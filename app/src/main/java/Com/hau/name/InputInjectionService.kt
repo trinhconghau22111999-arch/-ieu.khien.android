@@ -37,6 +37,8 @@ class InputInjectionService : AccessibilityService() {
     )
     private val activePointers = mutableMapOf<Int, PointerState>()
 
+    private val orientationUpdateRunnable = Runnable { sendScreenInfo() }
+
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == "active_room_code") roomCode = prefs.getString("active_room_code", null)
     }
@@ -216,13 +218,22 @@ class InputInjectionService : AccessibilityService() {
 
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
-        handler.postDelayed({ sendScreenInfo() }, 300)
+        handler.removeCallbacks(orientationUpdateRunnable)
+        handler.postDelayed(orientationUpdateRunnable, 300)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Reset text tracker khi focus đổi sang field khác
+        // Khi focus đổi sang field khác → đọc text hiện tại của field đó
+        // tránh trường hợp SET_TEXT xóa text cũ đang có
         if (event?.eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED) {
             currentFieldText.clear()
+            try {
+                val node = event.source
+                if (node?.isEditable == true) {
+                    val existing = node.text?.toString() ?: ""
+                    currentFieldText.append(existing)
+                }
+            } catch (_: Exception) {}
         }
     }
     override fun onInterrupt() {}

@@ -48,6 +48,7 @@ class ControllerActivity : AppCompatActivity() {
     // ── State ─────────────────────────────────────────────────────────────────
     private lateinit var prefs: SharedPreferences
     private var isConnected = false
+    private var isConnecting = false  // Tránh double-connect khi bấm 2 lần nhanh
     private var videoRect = VideoRect(0f, 0f, 0f, 0f)
     private var remoteW = 0; private var remoteH = 0
 
@@ -62,7 +63,6 @@ class ControllerActivity : AppCompatActivity() {
         setupSurface()
         setupLastServerButton()
         setupConnectButton()
-        setupDisconnect()
         setupKeyboard()
     }
 
@@ -147,7 +147,11 @@ class ControllerActivity : AppCompatActivity() {
     }
 
     private fun connectTo(code: String) {
-        if (isConnected) return
+        if (isConnected || isConnecting) return
+        isConnecting = true
+        // Disable các nút kết nối ngay khi bấm
+        btnConnect.isEnabled = false
+        btnLastServer.isEnabled = false
         prefs.edit().putString("last_room_code", code).apply()
 
         // Tắt battery optimization để Firebase không bị kill trên máy yếu
@@ -185,6 +189,7 @@ class ControllerActivity : AppCompatActivity() {
 
     private fun onWebRtcConnected() {
         isConnected = true
+        isConnecting = false
         layoutCodeEntry.visibility = View.GONE
         remoteViewContainer.visibility = View.VISIBLE
 
@@ -236,7 +241,7 @@ class ControllerActivity : AppCompatActivity() {
                 }
             }
 
-            updateVideoRect()
+            // videoRect đã được update khi nhận screen_orientation → không cần gọi lại mỗi touch
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                     val (nx, ny) = normalize(event.x, event.y)
@@ -378,7 +383,6 @@ class ControllerActivity : AppCompatActivity() {
         sendCommand(JSONObject().apply { put("type", "key_event"); put("key", key) })
     }
 
-    private fun setupDisconnect() { /* nút ngắt đã xóa, dùng long press bàn phím */ }
 
     private fun requestIgnoreBatteryOptimization() {
         try {
@@ -398,6 +402,9 @@ class ControllerActivity : AppCompatActivity() {
 
     private fun disconnect() {
         isConnected = false
+        isConnecting = false
+        btnConnect.isEnabled = true
+        btnLastServer.isEnabled = true
         handler.removeCallbacks(hideControlsRunnable)
         try { wifiLock?.release(); wifiLock = null } catch (_: Exception) {}
         signalingClient?.release(); signalingClient = null

@@ -188,16 +188,14 @@ class ConsentActivity : AppCompatActivity() {
         btnNewCode.visibility = View.VISIBLE
     }
 
-    /** Hiện nút "Bắt đầu lại" khi có mã cũ nhưng service chưa chạy (sau reboot) */
     private fun showResumeUI(code: String) {
         layoutConsent.visibility = View.GONE
         textPairingCode.text = code
         layoutPairingCode.visibility = View.VISIBLE
         btnNewCode.visibility = View.VISIBLE
-        // Dùng lại btn_generate_code làm nút "Bắt đầu lại" với mã cũ
         btnGenerateCode.isEnabled = true
         btnGenerateCode.text = "Bắt đầu lại với mã này"
-        btnGenerateCode.visibility = View.VISIBLE
+        btnGenerateCode.visibility = View.VISIBLE  // Đảm bảo visible
         btnGenerateCode.setOnClickListener {
             if (!isAccessibilityServiceEnabled()) {
                 Toast.makeText(this, "Vui lòng bật Dịch vụ Hỗ trợ trước", Toast.LENGTH_LONG).show()

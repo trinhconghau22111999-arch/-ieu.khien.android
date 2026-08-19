@@ -41,7 +41,6 @@ android {
         jvmTarget = "1.8"
     }
     buildFeatures {
-        viewBinding = true
     }
     lint {
         abortOnError = false
@@ -71,11 +70,7 @@ dependencies {
     // Firebase
     implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
     implementation("com.google.firebase:firebase-database-ktx")
-    implementation("com.google.firebase:firebase-auth-ktx")
 
     // WebRTC — fat AAR chứa tất cả ABI
     implementation("io.github.webrtc-sdk:android:125.6422.06.1")
-
-    // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }
